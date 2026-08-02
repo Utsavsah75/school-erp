@@ -1,0 +1,9 @@
+/node_modules/
+/vendor/
+/storage/cache/*
+/storage/logs/*
+.env
+
+# Ignore files/folders
+gulpfile.js
+New folder/

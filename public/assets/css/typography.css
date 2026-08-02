@@ -1,0 +1,373 @@
+/**
+ * School ERP — Global Typography System
+ * ---------------------------------------------------------------------
+ * Single source of truth for font family, size, weight, and line-height
+ * across the entire application. Loaded on every screen (main app layout,
+ * auth pages, error pages) BEFORE app.css / page-specific styles, so this
+ * file defines the baseline and anything after it only adds layout/color.
+ *
+ * Sizes are fluid (clamp()) so they scale smoothly between the mobile and
+ * desktop values called out in each comment, instead of jumping at fixed
+ * breakpoints. Only these four weights are used anywhere: 400 / 500 / 600 / 700.
+ *
+ * NOTE ON PRINT/PDF VIEWS: pages rendered through Dompdf (receipts, ID
+ * cards, report cards, bills) are generated server-side with remote
+ * fetching disabled, so they cannot load this stylesheet or Google Fonts.
+ * Those views keep a self-contained, print-safe font stack — see the
+ * comment block in each print view for details.
+ */
+
+:root {
+  /* ---------- Font family ----------
+     Headings/titles use Share Tech; everything else uses Open Sans. */
+  --font-family-heading: "Share Tech", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-family-base: "Roboto Condensed", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  /* ---------- Font weights (only these four are used anywhere) ---------- */
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  /* ---------- Body text ----------
+     Small mobile 320px: 13px -> Desktop 1440px+: 15px */
+  --fs-body: clamp(0.8125rem, 0.79rem + 0.15vw, 0.9375rem);
+  --lh-body: 1.6;
+
+  /* ---------- Headings (responsive, trimmed down for laptop/mobile) ---------- */
+  --fs-h1: clamp(1.5rem, 1.3rem + 1vw, 2.25rem);        /* 24px -> 36px */
+  --fs-h2: clamp(1.375rem, 1.2rem + 0.85vw, 2rem);      /* 22px -> 32px */
+  --fs-h3: clamp(1.25rem, 1.1rem + 0.7vw, 1.75rem);     /* 20px -> 28px */
+  --fs-h4: clamp(1.125rem, 1.02rem + 0.5vw, 1.5rem);    /* 18px -> 24px */
+  --fs-h5: clamp(1rem, 0.92rem + 0.4vw, 1.25rem);       /* 16px -> 20px */
+  --fs-h6: clamp(0.9375rem, 0.88rem + 0.25vw, 1.125rem); /* 15px -> 18px */
+  --lh-heading: 1.25;
+
+  /* ---------- Dashboard cards ---------- */
+  --fs-card-title: clamp(1rem, 0.94rem + 0.3vw, 1.1875rem);   /* 16px -> 19px */
+  --fs-card-value: 1rem;                                       /* fixed 16px for dashboard numbers */
+  --fs-card-desc: clamp(0.8125rem, 0.8rem + 0.1vw, 0.875rem); /* 13px -> 14px */
+
+  /* ---------- Dashboard stat icons ---------- */
+  --stat-icon-size: clamp(2rem, 1.6rem + 1.2vw, 2.75rem);      /* 32px -> 44px, scales with screen */
+  --fs-stat-icon: clamp(0.9375rem, 0.8rem + 0.5vw, 1.25rem);   /* 15px -> 20px */
+
+  /* ---------- Tables ---------- */
+  --fs-table-header: clamp(0.8125rem, 0.79rem + 0.1vw, 0.875rem);   /* 13px -> 14px */
+  --fs-table-cell: clamp(0.75rem, 0.735rem + 0.08vw, 0.8125rem);    /* 12px -> 13px */
+  --table-row-height: clamp(2.75rem, 2.5rem + 0.8vw, 3.25rem);      /* 44px -> 52px */
+
+  /* ---------- Forms ---------- */
+  --fs-label: clamp(0.8125rem, 0.8rem + 0.08vw, 0.875rem);        /* 13px -> 14px */
+  --fs-input: clamp(0.875rem, 0.85rem + 0.1vw, 0.9375rem);        /* 14px -> 15px */
+  --fs-placeholder: 0.8125rem;                                      /* 13px */
+  --fs-helper: clamp(0.6875rem, 0.67rem + 0.07vw, 0.75rem);        /* 11px -> 12px */
+  --fs-error: clamp(0.75rem, 0.73rem + 0.08vw, 0.8125rem);         /* 12px -> 13px */
+
+  /* ---------- Buttons ---------- */
+  --fs-btn: clamp(0.8125rem, 0.79rem + 0.1vw, 0.9375rem);         /* 13px -> 15px */
+  --fw-btn: var(--fw-semibold);
+
+  /* ---------- Sidebar ---------- */
+  --fs-sidebar-link: clamp(0.8125rem, 0.8rem + 0.1vw, 0.9375rem);   /* 13px -> 15px */
+  --fs-sidebar-heading: clamp(0.75rem, 0.73rem + 0.08vw, 0.8125rem); /* 12px -> 13px */
+
+  /* ---------- Navbar / Topbar ---------- */
+  --fs-navbar-title: clamp(1.125rem, 1rem + 0.45vw, 1.375rem);    /* 18px -> 22px */
+  --fs-navbar-item: clamp(0.8125rem, 0.8rem + 0.1vw, 0.9375rem);  /* 13px -> 15px */
+  --fs-navbar-username: clamp(0.8125rem, 0.8rem + 0.1vw, 0.9375rem); /* 13px -> 15px */
+
+  /* ---------- Modals ---------- */
+  --fs-modal-title: clamp(1.1875rem, 1.13rem + 0.25vw, 1.375rem);  /* 19px -> 22px */
+  --fs-modal-content: clamp(0.8125rem, 0.8rem + 0.1vw, 0.9375rem); /* 13px -> 15px */
+  --fs-modal-btn: clamp(0.8125rem, 0.79rem + 0.1vw, 0.9375rem);    /* 13px -> 15px */
+
+  /* ---------- Badges ---------- */
+  --fs-badge: clamp(0.6875rem, 0.67rem + 0.07vw, 0.75rem);        /* 11px -> 12px */
+
+  /* ---------- Breadcrumbs ---------- */
+  --fs-breadcrumb: 0.8125rem;                                       /* 13px, fixed per spec */
+
+  /* ---------- Footer ---------- */
+  --fs-footer: clamp(0.75rem, 0.73rem + 0.08vw, 0.8125rem);        /* 12px -> 13px */
+}
+
+/* =====================================================================
+   Base
+   ===================================================================== */
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: var(--font-family-base);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-regular);
+  line-height: var(--lh-body);
+}
+
+h1, h2, h3, h4, h5, h6,
+.h1, .h2, .h3, .h4, .h5, .h6 {
+  font-family: var(--font-family-heading);
+  line-height: var(--lh-heading);
+  margin-bottom: 0.5em;
+}
+h1, .h1 { font-size: var(--fs-h1); font-weight: var(--fw-bold); }
+h2, .h2 { font-size: var(--fs-h2); font-weight: var(--fw-bold); }
+h3, .h3 { font-size: var(--fs-h3); font-weight: var(--fw-semibold); }
+h4, .h4 { font-size: var(--fs-h4); font-weight: var(--fw-semibold); }
+h5, .h5 { font-size: var(--fs-h5); font-weight: var(--fw-semibold); }
+h6, .h6 { font-size: var(--fs-h6); font-weight: var(--fw-semibold); }
+
+small, .small { font-size: var(--fs-helper); }
+
+/* =====================================================================
+   Dashboard cards
+   (.stat-card is this app's dashboard KPI card; .card-title/.card-header
+   cover section cards used across every module)
+   ===================================================================== */
+.card-title,
+.card-header {
+  font-family: var(--font-family-heading);
+  font-size: var(--fs-card-title);
+  font-weight: var(--fw-semibold);
+}
+.stat-card .stat-label,
+.card-description,
+.card-subtitle {
+  font-size: var(--fs-card-desc);
+  font-weight: var(--fw-regular);
+}
+.stat-card h1, .stat-card h2, .stat-card h3,
+.stat-card h4, .stat-card h5, .stat-card h6,
+.card-value {
+  font-family: var(--font-family-base);
+  font-size: var(--fs-card-value);
+  font-weight: var(--fw-bold);
+  line-height: 1.15;
+  margin-bottom: 0;
+}
+
+/* ---------- Dashboard stat icons ----------
+   Icon badge and glyph shrink with the screen instead of staying a fixed
+   52px everywhere; see --stat-icon-size / --fs-stat-icon above. */
+.stat-card .stat-icon,
+.stat-icon {
+  width: var(--stat-icon-size);
+  height: var(--stat-icon-size);
+  font-size: var(--fs-stat-icon);
+}
+.stat-card .stat-icon i,
+.stat-icon i {
+  font-size: var(--fs-stat-icon);
+}
+
+/* =====================================================================
+   Tables
+   ===================================================================== */
+.table thead th {
+  font-size: var(--fs-table-header);
+  font-weight: var(--fw-semibold);
+}
+.table tbody td,
+.table tbody th {
+  font-size: var(--fs-table-cell);
+  font-weight: var(--fw-regular);
+  vertical-align: middle;
+}
+.table tbody tr {
+  height: var(--table-row-height);
+}
+/* Dense/compact tables opt out of the taller row height explicitly */
+.table-sm tbody tr {
+  height: auto;
+}
+
+/* =====================================================================
+   Forms
+   ===================================================================== */
+.form-label {
+  font-size: var(--fs-label);
+  font-weight: var(--fw-medium);
+}
+.form-control,
+.form-select,
+.form-check-label {
+  font-size: var(--fs-input);
+  font-weight: var(--fw-regular);
+}
+.form-control::placeholder {
+  font-size: var(--fs-placeholder);
+  font-weight: var(--fw-regular);
+  opacity: 0.7;
+}
+.form-text,
+.help-text {
+  font-size: var(--fs-helper);
+  font-weight: var(--fw-regular);
+}
+.invalid-feedback,
+.is-invalid ~ .invalid-feedback,
+.field-error,
+.text-danger.small {
+  font-size: var(--fs-error);
+  font-weight: var(--fw-regular);
+}
+
+/* =====================================================================
+   Buttons
+   ===================================================================== */
+.btn {
+  font-size: var(--fs-btn);
+  font-weight: var(--fw-btn);
+  text-align: center;
+}
+
+/* =====================================================================
+   Sidebar
+   ===================================================================== */
+.sidebar .nav-link {
+  font-size: var(--fs-sidebar-link);
+  font-weight: var(--fw-regular);
+}
+.sidebar .nav-link.active {
+  font-weight: var(--fw-semibold);
+}
+.sidebar .nav-sublink {
+  font-size: calc(var(--fs-sidebar-link) - 0.0625rem);
+}
+.nav-heading {
+  font-family: var(--font-family-heading);
+  font-size: var(--fs-sidebar-heading);
+  font-weight: var(--fw-bold);
+}
+
+/* =====================================================================
+   Navbar / Topbar
+   ===================================================================== */
+.sidebar-brand {
+  font-family: var(--font-family-heading);
+  font-size: var(--fs-navbar-title);
+  font-weight: var(--fw-bold);
+}
+.topbar .nav-link,
+.topbar .dropdown-item {
+  font-size: var(--fs-navbar-item);
+  font-weight: var(--fw-regular);
+}
+.topbar .user-name,
+.user-name {
+  font-size: var(--fs-navbar-username);
+  font-weight: var(--fw-medium);
+}
+
+/* =====================================================================
+   Modals (incl. SweetAlert2, used throughout for confirmations/alerts)
+   ===================================================================== */
+.modal-title {
+  font-family: var(--font-family-heading);
+  font-size: var(--fs-modal-title);
+  font-weight: var(--fw-semibold);
+}
+.modal-body {
+  font-size: var(--fs-modal-content);
+  font-weight: var(--fw-regular);
+}
+.modal-footer .btn {
+  font-size: var(--fs-modal-btn);
+  font-weight: var(--fw-btn);
+}
+.sa-popup {
+  font-family: var(--font-family-base);
+}
+.sa-popup .swal2-title {
+  font-family: var(--font-family-heading);
+  font-size: var(--fs-modal-title);
+  font-weight: var(--fw-semibold);
+}
+.sa-popup .swal2-html-container {
+  font-size: var(--fs-modal-content);
+  font-weight: var(--fw-regular);
+  color: #5a5c69;
+}
+.sa-toast .swal2-title {
+  font-size: var(--fs-card-desc);
+  font-weight: var(--fw-semibold);
+}
+
+/* =====================================================================
+   Badges
+   ===================================================================== */
+.badge {
+  font-size: var(--fs-badge);
+  font-weight: var(--fw-semibold);
+}
+
+/* =====================================================================
+   Breadcrumbs
+   ===================================================================== */
+.breadcrumb,
+.breadcrumb-item {
+  font-size: var(--fs-breadcrumb);
+  font-weight: var(--fw-regular);
+}
+.breadcrumb-item.active {
+  font-weight: var(--fw-medium);
+}
+
+/* =====================================================================
+   Footer
+   ===================================================================== */
+.page-footer,
+footer {
+  font-size: var(--fs-footer);
+  font-weight: var(--fw-regular);
+}
+
+/* =====================================================================
+   Pagination / Dropdowns / Notifications
+   (Bootstrap components used the same way across every module)
+   ===================================================================== */
+.pagination .page-link {
+  font-size: var(--fs-table-cell);
+  font-weight: var(--fw-regular);
+}
+.dropdown-menu {
+  font-size: var(--fs-navbar-item);
+}
+.dropdown-header {
+  font-size: var(--fs-sidebar-heading);
+  font-weight: var(--fw-semibold);
+}
+.toast,
+.notification-item {
+  font-size: var(--fs-card-desc);
+}
+.toast .toast-header {
+  font-weight: var(--fw-semibold);
+}
+
+/* =====================================================================
+   DataTables (wraps Bootstrap tables — inherits .table rules above,
+   these cover DataTables' own chrome: search box, length select, info text)
+   ===================================================================== */
+.dataTables_wrapper .dataTables_length,
+.dataTables_wrapper .dataTables_filter,
+.dataTables_wrapper .dataTables_info,
+.dataTables_wrapper .dataTables_paginate {
+  font-size: var(--fs-table-cell);
+}
+
+/* =====================================================================
+   Explicit breakpoint documentation
+   ---------------------------------------------------------------------
+   The clamp() values above already scale continuously across all of
+   these, but they are named here for reference and for any component
+   that needs a hard breakpoint override instead of fluid scaling:
+     Small mobile:  320px+
+     Mobile:        480px+
+     Tablet:        768px+
+     Laptop:        1024px+
+     Desktop:       1280px+
+     Large desktop: 1440px+
+   ===================================================================== */

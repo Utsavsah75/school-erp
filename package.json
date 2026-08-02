@@ -1,0 +1,17 @@
+{
+  "name": "school-erp7",
+  "version": "1.0.0",
+  "description": "��#\u0000 \u0000s\u0000c\u0000h\u0000o\u0000o\u0000l\u0000-\u0000e\u0000r\u0000p\u0000\r\u0000 \u0000",
+  "main": "gulpfile.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "browser-sync": "^3.0.4",
+    "gulp": "^5.0.1"
+  }
+}
