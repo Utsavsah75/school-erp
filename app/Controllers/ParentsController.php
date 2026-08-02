@@ -204,7 +204,7 @@ class ParentsController extends Controller
         $parentModel->update($id, ['user_id' => $userId]);
 
         $rawToken = (new PasswordReset())->createToken($userId);
-        $resetUrl = url('reset-password/' . $rawToken);
+        $resetUrl = absolute_url('reset-password/' . $rawToken);
 
         $html = '<p>Hi ' . e($parentModel->displayName($parent)) . ',</p>'
             . '<p>A School ERP parent portal account has been created for you. Click the link below to set your password and log in.</p>'

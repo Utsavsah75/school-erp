@@ -26,6 +26,11 @@ class Student extends Model
 
     protected array $searchable = ['full_name', 'admission_number', 'roll_number', 'phone', 'email'];
 
+    public function findByAdmissionNumber(string $admissionNumber): array|false
+    {
+        return $this->findBy('admission_number', $admissionNumber);
+    }
+
     /** One student with class/section/session/parent names already joined — Payment Collection's info card. */
     public function withDetails(int $id): array|false
     {

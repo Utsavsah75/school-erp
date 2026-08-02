@@ -64,7 +64,7 @@
         <div class="marquee-viewport flex-grow-1 overflow-hidden position-relative">
             <div class="marquee-track d-flex align-items-center gap-5" id="noticesMarqueeTrack"></div>
         </div>
-        <a href="<?= e(url('notices')) ?>" class="small text-nowrap">View All Notices</a>
+        <a href="<?= e(url('notices')) ?>" class="small text-nowrap">All Notices</a>
     </div>
 </div>
 
@@ -152,7 +152,8 @@
                         <h3><?= e(format_currency($stats['outstanding_fees'])) ?></h3>
                         <small class="text-muted">Incl. library fines</small>
                     </div>
-                    <div class="stat-icon" style="background:#e74a3b;"><i class="bi bi-exclamation-triangle-fill"></i></div>
+                    <div class="stat-icon" style="background:#e74a3b;"><i class="bi bi-exclamation-triangle-fill"></i>
+                    </div>
                 </div>
             </div>
         </a>
@@ -276,7 +277,9 @@
                             <tr>
                                 <td><?= $sn + 1 ?></td>
                                 <td><a href="<?= e(url('students/' . $s['id'])) ?>"
-                                        class="text-decoration-none fw-semibold" title="Student Database ID: <?= e($s['id']) ?>"><?= e($s['full_name']) ?></a></td>
+                                        class="text-decoration-none fw-semibold"
+                                        title="Student Database ID: <?= e($s['id']) ?>"><?= e($s['full_name']) ?></a>
+                                </td>
                                 <td><?= e(trim(($s['class_name'] ?? '-') . ' ' . ($s['section_name'] ?? ''))) ?></td>
                                 <td><?= e($s['admission_number']) ?></td>
                                 <td><span
@@ -328,12 +331,15 @@
                             <tr class="recent-row-clickable"
                                 <?= $profileUrl ? 'onclick="window.location=\'' . e($profileUrl) . '\'" style="cursor:pointer;"' : '' ?>
                                 title="<?= $profileUrl ? 'Open this student\'s profile' : '' ?>">
-                                <td><?= e($p['student_name'] ?? '-') ?><?= !empty($p['student_id']) ? ' <span class="text-muted small" title="Student Database ID: ' . e($p['student_id']) . '">&#9432;</span>' : '' ?></td>
+                                <td><?= e($p['student_name'] ?? '-') ?><?= !empty($p['student_id']) ? ' <span class="text-muted small" title="Student Database ID: ' . e($p['student_id']) . '">&#9432;</span>' : '' ?>
+                                </td>
                                 <td><?= e($p['receipt_number']) ?></td>
                                 <td><?= e(format_currency($p['amount'])) ?></td>
                                 <td class="text-capitalize"><?= e(str_replace('_', ' ', $p['payment_mode'])) ?></td>
                                 <td class="text-end">
-                                    <a href="<?= e(url('payments/receipt/' . $p['receipt_group'])) ?>" class="btn btn-sm btn-light" title="View Receipt" onclick="event.stopPropagation();"><i class="bi bi-eye"></i></a>
+                                    <a href="<?= e(url('payments/receipt/' . $p['receipt_group'])) ?>"
+                                        class="btn btn-sm btn-light" title="View Receipt"
+                                        onclick="event.stopPropagation();"><i class="bi bi-eye"></i></a>
                                 </td>
                             </tr>
                             <?php endforeach; ?>

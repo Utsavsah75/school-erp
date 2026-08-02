@@ -4,6 +4,7 @@
  * Roles must exactly match the `users.role` ENUM in the database.
  */
 const ROLE_SUPER_ADMIN    = 'super_admin';
+const ROLE_ADMIN          = 'admin';
 const ROLE_PRINCIPAL      = 'principal';
 const ROLE_VICE_PRINCIPAL = 'vice_principal';
 const ROLE_ACCOUNTANT     = 'accountant';
@@ -11,12 +12,13 @@ const ROLE_TEACHER        = 'teacher';
 const ROLE_CLASS_TEACHER  = 'class_teacher';
 const ROLE_LIBRARIAN      = 'librarian';
 const ROLE_RECEPTIONIST   = 'receptionist';
+const ROLE_STAFF          = 'staff';
 const ROLE_PARENT         = 'parent';
 const ROLE_STUDENT        = 'student';
 
 const ALL_ROLES = [
-    ROLE_SUPER_ADMIN, ROLE_PRINCIPAL, ROLE_VICE_PRINCIPAL, ROLE_ACCOUNTANT,
-    ROLE_TEACHER, ROLE_CLASS_TEACHER, ROLE_LIBRARIAN, ROLE_RECEPTIONIST,
+    ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_PRINCIPAL, ROLE_VICE_PRINCIPAL, ROLE_ACCOUNTANT,
+    ROLE_TEACHER, ROLE_CLASS_TEACHER, ROLE_LIBRARIAN, ROLE_RECEPTIONIST, ROLE_STAFF,
     ROLE_PARENT, ROLE_STUDENT,
 ];
 
@@ -24,8 +26,24 @@ const ALL_ROLES = [
  * Roles considered "staff" — used for admin-area sidebar / staff-only screens.
  */
 const STAFF_ROLES = [
-    ROLE_SUPER_ADMIN, ROLE_PRINCIPAL, ROLE_VICE_PRINCIPAL, ROLE_ACCOUNTANT,
-    ROLE_TEACHER, ROLE_CLASS_TEACHER, ROLE_LIBRARIAN, ROLE_RECEPTIONIST,
+    ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_PRINCIPAL, ROLE_VICE_PRINCIPAL, ROLE_ACCOUNTANT,
+    ROLE_TEACHER, ROLE_CLASS_TEACHER, ROLE_LIBRARIAN, ROLE_RECEPTIONIST, ROLE_STAFF,
+];
+
+/**
+ * Roles that a public "Staff/Employee Registration" invite may be issued
+ * for (see StaffInviteController / RegistrationController). Teachers use
+ * the dedicated Teacher registration method instead (matched against the
+ * `teachers` table by Employee Code), so they're excluded here.
+ */
+const INVITABLE_STAFF_ROLES = [
+    ROLE_ADMIN, ROLE_ACCOUNTANT, ROLE_LIBRARIAN, ROLE_RECEPTIONIST, ROLE_STAFF,
+];
+
+/** Roles a Super Admin may assign when directly creating an account (Admin Registration). */
+const ADMIN_CREATABLE_ROLES = [
+    ROLE_ADMIN, ROLE_PRINCIPAL, ROLE_VICE_PRINCIPAL, ROLE_ACCOUNTANT,
+    ROLE_LIBRARIAN, ROLE_RECEPTIONIST, ROLE_STAFF,
 ];
 
 /**

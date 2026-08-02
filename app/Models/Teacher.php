@@ -19,6 +19,11 @@ class Teacher extends Model
 
     protected array $searchable = ['full_name', 'employee_number', 'phone', 'email'];
 
+    public function findByEmployeeNumber(string $employeeNumber): array|false
+    {
+        return $this->findBy('employee_number', $employeeNumber);
+    }
+
     /** Only non-soft-deleted teachers — the listing/search screens should use this, not all(). */
     public function activeQuery(): array
     {

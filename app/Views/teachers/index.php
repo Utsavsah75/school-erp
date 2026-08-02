@@ -51,8 +51,10 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($result['data'] as $t): ?>
+                    <?php $start = ((int) ($result['page'] ?? 1) - 1) * ((int) ($result['per_page'] ?? count($result['data']))); ?>
+                    <?php foreach ($result['data'] as $i => $t): ?>
                     <tr>
+                        <td><?= e($start + $i + 1) ?></td>
                         <td>
                             <?php if (!empty($t['photo_path'])): ?>
                             <img src="<?= e(upload_url($t['photo_path'])) ?>" class="rounded-circle"

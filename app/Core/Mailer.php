@@ -160,6 +160,9 @@ class Mailer
 
     private static function sendViaPhpMailer(string $toEmail, string $toName, string $subject, string $htmlBody, array $config, string $logPath): array
     {
+        $debugOutput = '';
+        $debug = (bool) env('APP_DEBUG', false);
+
         try {
             $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
             $mail->isSMTP();
@@ -170,6 +173,19 @@ class Mailer
             $mail->SMTPSecure = $config['encryption'] ?: false;
             $mail->Port = $config['port'];
 
+            // SMTP conversation logging — only wired up when APP_DEBUG=true,
+            // so production never leaks SMTP transcripts (which include the
+            // AUTH exchange). In debug mode it's written to
+            // storage/logs/mail.log and echoed into the returned error on
+            // failure, so you can see exactly which step of the handshake
+            // failed instead of a bare exception message.
+            if ($debug) {
+                $mail->SMTPDebug = \PHPMailer\PHPMailer\SMTP::DEBUG_SERVER; // level 2: client + server messages
+                $mail->Debugoutput = function (string $str, int $level) use (&$debugOutput): void {
+                    $debugOutput .= "[{$level}] " . trim($str) . "\n";
+                };
+            }
+
             $mail->setFrom($config['from_address'], $config['from_name']);
             $mail->addAddress($toEmail, $toName);
             $mail->isHTML(true);
@@ -179,12 +195,40 @@ class Mailer
 
             $mail->send();
             self::log($logPath, $toEmail, $toName, $subject, $htmlBody, 'SENT via SMTP');
+            if ($debug && $debugOutput !== '') {
+                self::log($logPath, $toEmail, $toName, $subject, $htmlBody, "SMTP DEBUG:\n" . $debugOutput);
+            }
             return ['success' => true, 'transport' => 'smtp', 'error' => null];
         } catch (\Throwable $e) {
-            $message = $e->getMessage();
+            // Prefer PHPMailer's own ErrorInfo when available — it's usually
+            // the specific SMTP-level reason (auth rejected, connection
+            // refused, TLS failure, etc.), whereas the exception message can
+            // just be PHPMailer's generic wrapper text.
+            $message = (isset($mail) && $mail->ErrorInfo !== '') ? $mail->ErrorInfo : $e->getMessage();
+
             error_log('[MAIL ERROR] ' . $message);
-            self::log($logPath, $toEmail, $toName, $subject, $htmlBody, 'FAILED via SMTP: ' . $message);
-            return ['success' => false, 'transport' => 'smtp', 'error' => $message];
+            if ($debug && $debugOutput !== '') {
+                error_log("[MAIL SMTP DEBUG]\n" . $debugOutput);
+            }
+            self::log(
+                $logPath,
+                $toEmail,
+                $toName,
+                $subject,
+                $htmlBody,
+                'FAILED via SMTP: ' . $message . ($debug && $debugOutput !== '' ? "\nSMTP DEBUG:\n" . $debugOutput : '')
+            );
+
+            // Only surface the raw SMTP transcript to the caller in debug
+            // mode — it's invaluable for local troubleshooting but can
+            // contain server banners/handshake detail you don't want a
+            // production end user to see in a flashed error message.
+            $returnedError = $message;
+            if ($debug && $debugOutput !== '') {
+                $returnedError .= "\n\n--- SMTP debug ---\n" . $debugOutput;
+            }
+
+            return ['success' => false, 'transport' => 'smtp', 'error' => $returnedError];
         }
     }
 }

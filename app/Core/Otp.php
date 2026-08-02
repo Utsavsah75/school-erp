@@ -19,7 +19,7 @@ class Otp
         // Only one outstanding code per user/purpose/channel at a time.
         $model->invalidateOutstanding($userId, $purpose, $channel);
 
-        $length = config('otp.length', 6);
+        $length = Settings::int('otp_length', config('otp.length', 6));
         $max = (10 ** $length) - 1;
         $min = 10 ** ($length - 1);
         $code = (string) random_int($min, $max);
@@ -31,8 +31,8 @@ class Otp
             'code_hash'    => hash('sha256', $code),
             'destination'  => $destination,
             'attempts'     => 0,
-            'max_attempts' => config('otp.max_attempts', 5),
-            'expires_at'   => date('Y-m-d H:i:s', time() + config('otp.ttl_minutes', 10) * 60),
+            'max_attempts' => Settings::int('otp_max_attempts', config('otp.max_attempts', 5)),
+            'expires_at'   => date('Y-m-d H:i:s', time() + Settings::int('otp_ttl_minutes', config('otp.ttl_minutes', 10)) * 60),
         ]);
 
         return $code;

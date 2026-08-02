@@ -173,6 +173,15 @@ class Validator
                 $message = "{$label} must be a valid phone number.";
                 break;
 
+            case 'strong_password':
+                [$valid, $message] = self::checkPasswordPolicy((string) $value, $label);
+                break;
+
+            case 'username_format':
+                $valid = preg_match('/^[a-zA-Z0-9_.]{4,30}$/', (string) $value) === 1;
+                $message = "{$label} may only contain letters, numbers, dots and underscores (4-30 characters).";
+                break;
+
             default:
                 // Unknown rule name — ignore rather than false-fail the form.
                 return;
@@ -181,6 +190,40 @@ class Validator
         if (!$valid) {
             $this->errors[$field][] = $message;
         }
+    }
+
+    /**
+     * @return array{0: bool, 1: string}
+     */
+    private static function checkPasswordPolicy(string $value, string $label): array
+    {
+        $minLength = Settings::int('password_min_length', 8);
+        $requireUpper = Settings::bool('password_require_upper', true);
+        $requireLower = Settings::bool('password_require_lower', true);
+        $requireNumber = Settings::bool('password_require_number', true);
+        $requireSymbol = Settings::bool('password_require_symbol', true);
+
+        $problems = [];
+        if (mb_strlen($value) < $minLength) {
+            $problems[] = "at least {$minLength} characters";
+        }
+        if ($requireUpper && !preg_match('/[A-Z]/', $value)) {
+            $problems[] = 'an uppercase letter';
+        }
+        if ($requireLower && !preg_match('/[a-z]/', $value)) {
+            $problems[] = 'a lowercase letter';
+        }
+        if ($requireNumber && !preg_match('/[0-9]/', $value)) {
+            $problems[] = 'a number';
+        }
+        if ($requireSymbol && !preg_match('/[^A-Za-z0-9]/', $value)) {
+            $problems[] = 'a special character';
+        }
+
+        if (empty($problems)) {
+            return [true, ''];
+        }
+        return [false, "{$label} must contain " . implode(', ', $problems) . '.'];
     }
 
     private function isUnique(?string $table, string $column, mixed $value, ?string $ignoreId): bool

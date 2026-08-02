@@ -124,6 +124,16 @@ class Router
             $roles = explode(',', substr($mw, 5));
             return (new RoleMiddleware($roles))->handle();
         }
+        if (str_starts_with($mw, 'throttle:')) {
+            // 'throttle:bucket,max,windowSecs,blockMins[,identifierPostField]'
+            $parts = explode(',', substr($mw, 9));
+            $bucket = $parts[0] ?? 'default';
+            $max = (int) ($parts[1] ?? 5);
+            $window = (int) ($parts[2] ?? 60);
+            $block = (int) ($parts[3] ?? 15);
+            $field = $parts[4] ?? null;
+            return (new RateLimitMiddleware($bucket, $max, $window, $block, $field))->handle();
+        }
         return true;
     }
 

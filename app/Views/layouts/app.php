@@ -314,6 +314,12 @@ if ($currentUser) {
                 <?php if (Auth::can('settings')): ?>
                 <a href="<?= e(url('settings')) ?>" class="nav-link <?= active_route('settings') ?>"><i
                         class="bi bi-gear-fill"></i><span>Settings</span></a>
+                <a href="<?= e(url('settings/registration-security')) ?>" class="nav-link <?= active_route('settings/registration-security') ?>"><i
+                        class="bi bi-shield-lock-fill"></i><span>Registration &amp; Security</span></a>
+                <a href="<?= e(url('staff-invites')) ?>" class="nav-link <?= active_route('staff-invites') ?>"><i
+                        class="bi bi-ticket-perforated-fill"></i><span>Staff Invites</span></a>
+                <a href="<?= e(url('admin/register')) ?>" class="nav-link <?= active_route('admin/register') ?>"><i
+                        class="bi bi-person-plus-fill"></i><span>Register New Account</span></a>
                 <?php endif; ?>
             </nav>
         </aside>
@@ -415,6 +421,8 @@ if ($currentUser) {
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li><a class="dropdown-item" href="<?= e(url('change-password')) ?>"><i
                                         class="bi bi-key-fill me-2"></i>Change Password</a></li>
+                            <li><a class="dropdown-item" href="<?= e(url('2fa/setup')) ?>"><i
+                                        class="bi bi-shield-lock-fill me-2"></i>Two-Factor Authentication</a></li>
                             <li>
                                 <hr class="dropdown-divider">
                             </li>

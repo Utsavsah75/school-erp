@@ -27,6 +27,16 @@ class ParentModel extends Model
         return $this->findBy('user_id', $userId);
     }
 
+    public function findByPhone(string $phone): array|false
+    {
+        return $this->findBy('phone', $phone);
+    }
+
+    public function findByEmail(string $email): array|false
+    {
+        return $this->findBy('email', $email);
+    }
+
     /** All children (students) belonging to this parent. */
     public function children(int $parentId): array
     {

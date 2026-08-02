@@ -122,7 +122,8 @@
                                     <td><small><?= e($row['isbn'] ?? '—') ?></small></td>
                                     <td><?= e($row['borrower_name'] ?? '—') ?><?php if (!empty($row['admission_number'])): ?>
                                         <div class="text-muted"><small>#<?= e($row['admission_number']) ?></small></div>
-                                        <?php endif; ?></td>
+                                        <?php endif; ?>
+                                    </td>
                                     <td><span
                                             class="badge <?= status_badge_class((string) $row['status']) ?>"><?= e(ucfirst((string) $row['status'])) ?></span>
                                     </td>
@@ -149,12 +150,13 @@
                     <ul class="list-unstyled mb-0" style="max-height:420px;overflow-y:auto;">
                         <?php foreach ($recentActivity as $i => $row): ?>
                         <li class="d-flex align-items-start gap-2 py-2 border-bottom">
-                            <span class="badge bg-light text-dark border me-1"><?= (int) ($i + 1) ?></span>
+                            <span class="text-muted fw-semibold me-1"><?= (int) ($i + 1) ?>.</span>
                             <i class="bi <?= e($row['icon']) ?> mt-1"></i>
                             <div class="flex-grow-1">
                                 <div><strong><?= e($row['display_user']) ?></strong> —
                                     <?= e($row['label']) ?><?php if (!empty($row['book_title'])): ?>:
-                                    <em><?= e($row['book_title']) ?></em><?php endif; ?></div>
+                                    <em><?= e($row['book_title']) ?></em><?php endif; ?>
+                                </div>
                                 <div class="text-muted"><small><?= e($row['message']) ?></small></div>
                                 <small class="text-muted"><?= e(format_datetime($row['activity_at'])) ?> ·
                                     <?= e(time_ago($row['activity_at'])) ?></small>
@@ -412,7 +414,8 @@
                             <td><small><?= e($row['isbn'] ?? '—') ?></small></td>
                             <td><?= e($row['student_name'] ?? $row['teacher_name'] ?? '—') ?><?php if (!empty($row['admission_number'])): ?>
                                 <div class="text-muted"><small>#<?= e($row['admission_number']) ?></small></div>
-                                <?php endif; ?></td>
+                                <?php endif; ?>
+                            </td>
                             <td><?= e($row['reserved_date']) ?></td>
                             <td><span
                                     class="badge <?= status_badge_class((string) $row['status']) ?>"><?= e(ucfirst((string) $row['status'])) ?></span>

@@ -37,13 +37,9 @@
                 </thead>
                 <tbody>
                     <?php $start = ((int) ($result['page'] ?? 1) - 1) * ((int) ($result['per_page'] ?? count($result['data']))); ?>
-                    <?php foreach ($result['data'] as $i => $s): ?>
+                    <?php foreach ($result['data'] as $i => $p): ?>
                     <tr>
                         <td><?= e($start + $i + 1) ?></td>
-
-
-                        <?php foreach ($result['data'] as $p): ?>
-                    <tr>
                         <td>
                             <a href="<?= e(url('parents/' . $p['id'])) ?>" class="fw-semibold text-decoration-none">
                                 <?= e($p['father_name'] ?? $p['guardian_name'] ?? $p['mother_name'] ?? 'Guardian') ?>

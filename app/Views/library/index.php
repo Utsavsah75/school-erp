@@ -48,7 +48,7 @@
     var container = document.getElementById('library-dashboard-body');
     var updatedLabel = document.getElementById('library-dashboard-updated');
     var refreshUrl = '<?= e(url('library/dashboard-data')) ?>';
-    var REFRESH_MS = 15000;
+    var REFRESH_MS = 150000;
 
     function initDataTables(scope) {
         if (!(window.jQuery && jQuery.fn.DataTable)) {
@@ -128,7 +128,8 @@
                 }
             })
             .catch(function() {
-                /* silent — keep showing the last good data */ })
+                /* silent — keep showing the last good data */
+            })
             .finally(function() {
                 if (container) {
                     container.classList.remove('is-refreshing');

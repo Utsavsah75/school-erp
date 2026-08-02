@@ -68,6 +68,31 @@ if (!function_exists('url')) {
     }
 }
 
+if (!function_exists('absolute_url')) {
+    /**
+     * Fully-qualified URL (scheme + host + path), for links that leave the
+     * current request — email bodies, SMS, anywhere there's no browser
+     * "current page" to resolve a relative link against.
+     *
+     * url() deliberately returns only a host-relative path (derived from
+     * SCRIPT_NAME) so in-page links/forms/redirects keep working no matter
+     * what domain the app is accessed under. That's exactly wrong for an
+     * emailed link: a mail client has no "current host" to resolve
+     * "/school-erp/public/reset-password/..." against, so it renders as a
+     * broken/invalid URL (this is what caused the Google redirect-notice
+     * page — the href had no scheme or host at all). absolute_url() instead
+     * builds on APP_URL from .env, which is a full origin
+     * (http://localhost/school-erp/public), so links always work when
+     * clicked outside the app itself.
+     */
+    function absolute_url(string $path = ''): string
+    {
+        $path = '/' . ltrim($path, '/');
+        $base = rtrim((string) config('app.url'), '/');
+        return $base . ($path === '/' ? '' : $path);
+    }
+}
+
 if (!function_exists('asset')) {
     function asset(string $path): string
     {

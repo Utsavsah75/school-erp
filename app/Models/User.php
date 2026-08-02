@@ -10,9 +10,12 @@ class User extends Model
     protected string $primaryKey = 'id';
 
     protected array $fillable = [
-        'full_name', 'email', 'password', 'role', 'phone', 'username', 'two_factor_enabled',
+        'full_name', 'email', 'password', 'role', 'phone', 'username', 'employee_code', 'two_factor_enabled',
+        'two_factor_secret', 'two_factor_recovery_codes',
         'is_active', 'last_login_at', 'remember_token',
         'email_verified_at', 'verification_token', 'verification_token_expires_at',
+        'phone_verified_at', 'failed_login_attempts', 'locked_until',
+        'password_changed_at', 'must_change_password', 'registered_via', 'registration_ip',
     ];
 
     protected array $searchable = ['full_name', 'email', 'phone', 'username'];
@@ -85,5 +88,103 @@ class User extends Model
             'verification_token' => null,
             'verification_token_expires_at' => null,
         ]);
+    }
+
+    // ------------------------------------------------------------
+    // Multi-method login lookups
+    // ------------------------------------------------------------
+
+    public function findByUsername(string $username): array|false
+    {
+        return $this->findBy('username', $username);
+    }
+
+    public function findByPhone(string $phone): array|false
+    {
+        return $this->findBy('phone', $phone);
+    }
+
+    public function findByEmployeeCode(string $employeeCode): array|false
+    {
+        return $this->findBy('employee_code', $employeeCode);
+    }
+
+    public function phoneExists(string $phone, ?int $ignoreId = null): bool
+    {
+        $sql = 'SELECT COUNT(*) AS c FROM `users` WHERE `phone` = :phone';
+        $params = ['phone' => $phone];
+        if ($ignoreId !== null) {
+            $sql .= ' AND `id` != :id';
+            $params['id'] = $ignoreId;
+        }
+        $row = $this->raw($sql, $params);
+        return (int) ($row[0]['c'] ?? 0) > 0;
+    }
+
+    public function employeeCodeExists(string $code, ?int $ignoreId = null): bool
+    {
+        $sql = 'SELECT COUNT(*) AS c FROM `users` WHERE `employee_code` = :code';
+        $params = ['code' => $code];
+        if ($ignoreId !== null) {
+            $sql .= ' AND `id` != :id';
+            $params['id'] = $ignoreId;
+        }
+        $row = $this->raw($sql, $params);
+        return (int) ($row[0]['c'] ?? 0) > 0;
+    }
+
+    // ------------------------------------------------------------
+    // Account lockout (brute-force protection)
+    // ------------------------------------------------------------
+
+    public function isLocked(array $user): bool
+    {
+        return !empty($user['locked_until']) && strtotime($user['locked_until']) > time();
+    }
+
+    public function registerFailedAttempt(int $userId, int $maxAttempts, int $lockMinutes): void
+    {
+        $user = $this->find($userId);
+        if (!$user) {
+            return;
+        }
+        $attempts = (int) $user['failed_login_attempts'] + 1;
+        $data = ['failed_login_attempts' => $attempts];
+        if ($attempts >= $maxAttempts) {
+            $data['locked_until'] = date('Y-m-d H:i:s', time() + $lockMinutes * 60);
+        }
+        $this->update($userId, $data);
+    }
+
+    public function resetFailedAttempts(int $userId): void
+    {
+        $this->update($userId, ['failed_login_attempts' => 0, 'locked_until' => null]);
+    }
+
+    // ------------------------------------------------------------
+    // Two-Factor Authentication
+    // ------------------------------------------------------------
+
+    public function enableTwoFactor(int $userId, string $secret, string $hashedRecoveryCodesJson): void
+    {
+        $this->update($userId, [
+            'two_factor_enabled'        => 1,
+            'two_factor_secret'         => $secret,
+            'two_factor_recovery_codes' => $hashedRecoveryCodesJson,
+        ]);
+    }
+
+    public function disableTwoFactor(int $userId): void
+    {
+        $this->update($userId, [
+            'two_factor_enabled'        => 0,
+            'two_factor_secret'         => null,
+            'two_factor_recovery_codes' => null,
+        ]);
+    }
+
+    public function markPhoneVerified(int $userId): void
+    {
+        $this->update($userId, ['phone_verified_at' => date('Y-m-d H:i:s')]);
     }
 }

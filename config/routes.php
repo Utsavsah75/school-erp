@@ -2,6 +2,9 @@
 
 use App\Core\Router;
 use App\Controllers\AuthController;
+use App\Controllers\RegistrationController;
+use App\Controllers\TwoFactorController;
+use App\Controllers\StaffInviteController;
 use App\Controllers\DashboardController;
 use App\Controllers\StudentController;
 use App\Controllers\ParentController;
@@ -38,11 +41,53 @@ return function (Router $router): void {
     $router->get('/', [AuthController::class, 'showLogin']);
 
     $router->get('/login', [AuthController::class, 'showLogin'], ['guest']);
-    $router->post('/login', [AuthController::class, 'login'], ['guest', 'csrf']);
+    $router->post('/login', [AuthController::class, 'login'], ['guest', 'csrf', 'throttle:login,8,60,15,email']);
     $router->post('/logout', [AuthController::class, 'logout'], ['auth', 'csrf']);
 
+    // ------------------------------------------------------------
+    // Phone + OTP login (passwordless tab on the login page)
+    // ------------------------------------------------------------
+    $router->post('/login/phone/start', [AuthController::class, 'phoneOtpStart'], ['guest', 'csrf', 'throttle:login-phone,5,60,15,phone']);
+    $router->post('/login/phone/verify', [AuthController::class, 'phoneOtpVerify'], ['guest', 'csrf', 'throttle:login-phone-verify,8,60,15,phone']);
+
+    // ------------------------------------------------------------
+    // Two-Factor Authentication
+    // ------------------------------------------------------------
+    $router->get('/2fa/verify', [TwoFactorController::class, 'showVerify'], ['guest']);
+    $router->post('/2fa/verify', [TwoFactorController::class, 'verify'], ['guest', 'csrf', 'throttle:2fa-verify,8,60,15']);
+    $router->get('/2fa/setup', [TwoFactorController::class, 'showSetup'], ['auth']);
+    $router->post('/2fa/setup', [TwoFactorController::class, 'enable'], ['auth', 'csrf']);
+    $router->post('/2fa/disable', [TwoFactorController::class, 'disable'], ['auth', 'csrf']);
+
+    // ------------------------------------------------------------
+    // Public self-registration wizard — see RegistrationController for
+    // the full role/method matrix (Parent, Student, Teacher, Staff).
+    // ------------------------------------------------------------
+    $router->get('/register', [RegistrationController::class, 'showRoleSelect'], ['guest']);
+    $router->get('/register/wizard', [RegistrationController::class, 'showWizard'], ['guest']);
+    $router->post('/register/start', [RegistrationController::class, 'start'], ['guest', 'csrf', 'throttle:register-start,10,300,15']);
+    $router->post('/register/resend-otp', [RegistrationController::class, 'resendOtp'], ['guest', 'csrf', 'throttle:register-resend,10,300,15']);
+    $router->post('/register/verify-otp', [RegistrationController::class, 'verifyOtp'], ['guest', 'csrf', 'throttle:register-verify,15,300,15']);
+    $router->post('/register/complete', [RegistrationController::class, 'complete'], ['guest', 'csrf']);
+
+    // ------------------------------------------------------------
+    // Admin Registration — Super Admin only, direct account creation
+    // (no self-service OTP; see RegistrationController::storeAdmin()).
+    // ------------------------------------------------------------
+    $router->get('/admin/register', [RegistrationController::class, 'showCreateAdmin'], ['auth', 'role:super_admin']);
+    $router->post('/admin/register', [RegistrationController::class, 'storeAdmin'], ['auth', 'role:super_admin', 'csrf']);
+
+    // ------------------------------------------------------------
+    // Staff Registration Invites — Super Admin pre-provisions Employee
+    // Codes that the public "Staff/Employee Registration" wizard step
+    // requires (prevents self-granting a privileged role).
+    // ------------------------------------------------------------
+    $router->get('/staff-invites', [StaffInviteController::class, 'index'], ['auth', 'role:super_admin']);
+    $router->post('/staff-invites', [StaffInviteController::class, 'store'], ['auth', 'role:super_admin', 'csrf']);
+    $router->post('/staff-invites/{id}/delete', [StaffInviteController::class, 'destroy'], ['auth', 'role:super_admin', 'csrf']);
+
     $router->get('/forgot-password', [AuthController::class, 'showForgotPassword'], ['guest']);
-    $router->post('/forgot-password', [AuthController::class, 'sendResetLink'], ['guest', 'csrf']);
+    $router->post('/forgot-password', [AuthController::class, 'sendResetLink'], ['guest', 'csrf', 'throttle:forgot-password,5,300,15,email']);
 
     $router->get('/reset-password/{token}', [AuthController::class, 'showResetPassword'], ['guest']);
     $router->post('/reset-password', [AuthController::class, 'resetPassword'], ['guest', 'csrf']);
@@ -59,9 +104,9 @@ return function (Router $router): void {
     // ------------------------------------------------------------
     // Forgot password — email/SMS OTP channel
     // ------------------------------------------------------------
-    $router->post('/forgot-password/otp', [AuthController::class, 'sendResetOtp'], ['guest', 'csrf']);
+    $router->post('/forgot-password/otp', [AuthController::class, 'sendResetOtp'], ['guest', 'csrf', 'throttle:forgot-password-otp,5,300,15,email']);
     $router->get('/forgot-password/otp/verify', [AuthController::class, 'showVerifyResetOtp'], ['guest']);
-    $router->post('/forgot-password/otp/verify', [AuthController::class, 'verifyResetOtp'], ['guest', 'csrf']);
+    $router->post('/forgot-password/otp/verify', [AuthController::class, 'verifyResetOtp'], ['guest', 'csrf', 'throttle:forgot-password-otp-verify,10,300,15']);
     $router->get('/forgot-password/otp/reset', [AuthController::class, 'showResetPasswordAfterVerification'], ['guest']);
     $router->post('/forgot-password/otp/reset', [AuthController::class, 'resetPasswordAfterVerification'], ['guest', 'csrf']);
 
@@ -144,6 +189,8 @@ return function (Router $router): void {
     // ------------------------------------------------------------
     $router->get('/settings', [SettingsController::class, 'index'], ['auth']);
     $router->post('/settings/test-email', [SettingsController::class, 'sendTestEmail'], ['auth', 'csrf']);
+    $router->get('/settings/registration-security', [SettingsController::class, 'registrationSecurity'], ['auth', 'role:super_admin']);
+    $router->post('/settings/registration-security', [SettingsController::class, 'updateRegistrationSecurity'], ['auth', 'role:super_admin', 'csrf']);
 
     // ------------------------------------------------------------
     // Subjects — single-page create + searchable/filterable/sortable

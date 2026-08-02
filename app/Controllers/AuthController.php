@@ -4,7 +4,6 @@ namespace App\Controllers;
 
 use App\Core\Auth;
 use App\Core\Controller;
-use App\Core\Exceptions\UnverifiedEmailException;
 use App\Core\Mailer;
 use App\Core\Otp;
 use App\Core\Session;
@@ -23,37 +22,108 @@ class AuthController extends Controller
         $this->view('auth/login', [
             'errors'           => Session::getErrors(),
             'unverifiedEmail'  => Session::flash('unverified_email'),
+            'recaptchaSite'    => \App\Core\Recaptcha::isEnabled() ? \App\Core\Recaptcha::siteKey() : null,
         ], null);
     }
 
+    /**
+     * Handles every "identifier + password" login tab (Email, Username,
+     * Student ID, Employee ID). The tab picks `login_type`; Phone + OTP
+     * login uses phoneOtpStart()/phoneOtpVerify() below instead since it's
+     * passwordless. Account lockout, rate limiting (route middleware), and
+     * the 2FA handoff are all handled inside Auth::attemptByIdentifier().
+     */
     public function login(): void
     {
-        $data = $this->validate([
-            'email'    => 'required|email',
-            'password' => 'required',
-        ]);
+        $type = $_POST['login_type'] ?? 'email';
+        if (!in_array($type, Auth::IDENTIFIER_TYPES, true)) {
+            $type = 'email';
+        }
 
+        $rules = ['password' => 'required'];
+        $rules[$type] = $type === 'email' ? 'required|email' : 'required';
+        $data = $this->validate($rules);
+
+        if (!\App\Core\Recaptcha::verify($_POST['g-recaptcha-response'] ?? null)) {
+            Session::flash('error', 'reCAPTCHA verification failed. Please try again.');
+            Session::setOldInput($data);
+            $this->redirect(url('login'));
+            return;
+        }
+
+        $identifier = $data[$type];
         $remember = !empty($_POST['remember']);
 
-        try {
-            $user = Auth::attempt($data['email'], $data['password'], $remember);
-        } catch (UnverifiedEmailException) {
-            Session::setOldInput(['email' => $data['email']]);
-            Session::flash('error', 'Please verify your email address before logging in.');
-            Session::flash('unverified_email', $data['email']);
-            $this->redirect(url('login'));
+        $result = Auth::attemptByIdentifier($type, $identifier, $data['password'], $remember);
+
+        switch ($result['status']) {
+            case 'ok':
+                Session::clearOldInput();
+                $this->redirect(url('dashboard'));
+                return;
+
+            case '2fa_required':
+                $this->redirect(url('2fa/verify'));
+                return;
+
+            case 'unverified_email':
+                Session::setOldInput(['email' => $identifier]);
+                Session::flash('error', 'Please verify your email address before logging in.');
+                Session::flash('unverified_email', $identifier);
+                $this->redirect(url('login'));
+                return;
+
+            case 'locked':
+                Session::flash('error', $result['message']);
+                $this->redirect(url('login'));
+                return;
+
+            case 'inactive':
+                Session::flash('error', $result['message']);
+                $this->redirect(url('login'));
+                return;
+
+            default: // invalid
+                Session::flash('error', 'Invalid credentials, or your account is inactive.');
+                Session::setOldInput($data);
+                $this->redirect(url('login'));
+                return;
+        }
+    }
+
+    // ------------------------------------------------------------
+    // Phone + OTP login (passwordless)
+    // ------------------------------------------------------------
+
+    public function phoneOtpStart(): void
+    {
+        $data = $this->validate(['phone' => 'required|phone']);
+
+        if (!\App\Core\Recaptcha::verify($_POST['g-recaptcha-response'] ?? null)) {
+            $this->json(['ok' => false, 'message' => 'reCAPTCHA verification failed. Please try again.'], 422);
             return;
         }
 
-        if (!$user) {
-            Session::flash('error', 'Invalid email or password, or your account is inactive.');
-            Session::setOldInput(['email' => $data['email']]);
-            $this->redirect(url('login'));
+        $result = Auth::startPhoneOtpLogin($data['phone']);
+        $this->json($result, $result['ok'] ? 200 : 422);
+    }
+
+    public function phoneOtpVerify(): void
+    {
+        $data = $this->validate(['phone' => 'required|phone', 'code' => 'required']);
+        $remember = !empty($_POST['remember']);
+
+        $result = Auth::verifyPhoneOtpLogin($data['phone'], $data['code'], $remember);
+
+        if ($result['status'] === 'ok') {
+            $this->json(['ok' => true, 'redirect' => url('dashboard')]);
             return;
         }
-
-        Session::clearOldInput();
-        $this->redirect(url('dashboard'));
+        if ($result['status'] === '2fa_required') {
+            $this->json(['ok' => true, 'redirect' => url('2fa/verify')]);
+            return;
+        }
+        $this->json(['ok' => false, 'message' => $result['message']], 422);
     }
 
     public function logout(): void
@@ -76,7 +146,7 @@ class AuthController extends Controller
     public static function sendVerificationEmail(array $user): array
     {
         $rawToken = (new User())->setVerificationToken($user['id']);
-        $verifyUrl = url('verify-email/' . $rawToken);
+        $verifyUrl = absolute_url('verify-email/' . $rawToken);
 
         $html = "<h2>Welcome to School ERP</h2>"
             . "<p>Hi {$user['full_name']},</p>"
@@ -165,7 +235,7 @@ class AuthController extends Controller
         if ($user) {
             $resetModel = new PasswordReset();
             $rawToken = $resetModel->createToken($user['id']);
-            $resetUrl = url('reset-password/' . $rawToken);
+            $resetUrl = absolute_url('reset-password/' . $rawToken);
 
             $html = "<p>Hi {$user['full_name']},</p>"
                 . "<p>Click the link below to reset your School ERP password. This link expires in 1 hour.</p>"
@@ -236,10 +306,21 @@ class AuthController extends Controller
 
     public function sendResetOtp(): void
     {
-        $data = $this->validate([
-            'email'   => 'required|email',
-            'channel' => 'required|in:email,sms',
-        ]);
+        // Which identifying field we require depends on the chosen channel:
+        // email lookups use the email field, SMS lookups use the phone field.
+        $channel = $this->input('channel');
+
+        if ($channel === 'sms') {
+            $data = $this->validate([
+                'phone'   => 'required',
+                'channel' => 'required|in:email,sms',
+            ]);
+        } else {
+            $data = $this->validate([
+                'email'   => 'required|email',
+                'channel' => 'required|in:email,sms',
+            ]);
+        }
 
         if ($data['channel'] === 'email' && !Mailer::isConfigured()) {
             Session::flash('error', 'Email sending is not configured on this server yet. Please contact your administrator, or see Settings > Mail Setup.');
@@ -248,14 +329,16 @@ class AuthController extends Controller
         }
 
         $userModel = new User();
-        $user = $userModel->findByEmail($data['email']);
+        $user = $data['channel'] === 'sms'
+            ? $userModel->findByPhone($data['phone'])
+            : $userModel->findByEmail($data['email']);
         $ttl = config('otp.ttl_minutes', 10);
 
         $sendFailed = false;
         $sendError = null;
 
-        // SMS is only offered when the account has a phone on file; email is always available.
-        if ($user && ($data['channel'] === 'email' || !empty($user['phone']))) {
+        // SMS looks the account up by the mobile number entered; email is always available.
+        if ($user) {
             if ($data['channel'] === 'sms') {
                 $code = Otp::generate((int) $user['id'], 'sms', $user['phone']);
                 Sms::send($user['phone'], "Your School ERP password reset code is {$code}. It expires in {$ttl} minutes.");
@@ -467,7 +550,7 @@ class AuthController extends Controller
         }
 
         $rawToken = (new PasswordReset())->createToken($user['id']);
-        $resetUrl = url('reset-password/' . $rawToken);
+        $resetUrl = absolute_url('reset-password/' . $rawToken);
 
         $html = "<p>Hi {$user['full_name']},</p>"
             . "<p>An administrator has requested a password reset for your School ERP account. "

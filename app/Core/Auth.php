@@ -3,6 +3,8 @@
 namespace App\Core;
 
 use App\Core\Exceptions\UnverifiedEmailException;
+use App\Models\Student;
+use App\Models\Teacher;
 use App\Models\User;
 
 /**
@@ -222,5 +224,219 @@ class Auth
     public static function hashPassword(string $password): string
     {
         return password_hash($password, PASSWORD_BCRYPT);
+    }
+
+    // ------------------------------------------------------------------
+    // Multi-method login: Email/Username/Student ID/Employee ID + Password,
+    // used by the tabbed login form. Adds account-lockout tracking and a
+    // 2FA-pending handoff on top of the same rules as attempt() above.
+    // ------------------------------------------------------------------
+
+    public const IDENTIFIER_TYPES = ['email', 'username', 'student_id', 'employee_id'];
+
+    public static function isAccountLocked(array $user): bool
+    {
+        return !empty($user['locked_until']) && strtotime($user['locked_until']) > time();
+    }
+
+    public static function lockoutRemainingMinutes(array $user): int
+    {
+        if (empty($user['locked_until'])) {
+            return 0;
+        }
+        return max(0, (int) ceil((strtotime($user['locked_until']) - time()) / 60));
+    }
+
+    /**
+     * @return array{status: string, user: ?array, message: ?string}
+     * status one of: ok | invalid | locked | inactive | unverified_email | 2fa_required
+     */
+    public static function attemptByIdentifier(string $type, string $identifier, string $password, bool $remember = false): array
+    {
+        $userModel = new User();
+        $user = self::resolveByIdentifier($type, $identifier, $userModel);
+
+        $maxAttempts = Settings::int('max_failed_login_attempts', 5);
+        $lockMinutes = Settings::int('account_lock_minutes', 15);
+
+        if (!$user) {
+            return ['status' => 'invalid', 'user' => null, 'message' => 'Invalid credentials.'];
+        }
+
+        if (self::isAccountLocked($user)) {
+            $mins = self::lockoutRemainingMinutes($user);
+            return ['status' => 'locked', 'user' => null, 'message' => "Too many failed attempts. Please try again in {$mins} minute(s)."];
+        }
+
+        if (!password_verify($password, $user['password'])) {
+            $userModel->registerFailedAttempt((int) $user['id'], $maxAttempts, $lockMinutes);
+            return ['status' => 'invalid', 'user' => null, 'message' => 'Invalid credentials.'];
+        }
+
+        if ((int) $user['is_active'] !== 1) {
+            return ['status' => 'inactive', 'user' => null, 'message' => 'Your account is inactive. Please contact your administrator.'];
+        }
+
+        // Only the Email login method is gated on email verification — a
+        // Student/Employee ID or Username login shouldn't be blocked by an
+        // unverified email that may not even be the credential in use.
+        if ($type === 'email' && config('features.email_verification_required', true) && empty($user['email_verified_at'])) {
+            return ['status' => 'unverified_email', 'user' => $user, 'message' => 'Please verify your email address before logging in.'];
+        }
+
+        $userModel->resetFailedAttempts((int) $user['id']);
+
+        if (!empty($user['two_factor_enabled'])) {
+            Session::set('pending_2fa_user_id', $user['id']);
+            Session::set('pending_2fa_remember', $remember);
+            return ['status' => '2fa_required', 'user' => $user, 'message' => null];
+        }
+
+        self::completeLogin($user, $remember);
+        return ['status' => 'ok', 'user' => $user, 'message' => null];
+    }
+
+    private static function resolveByIdentifier(string $type, string $identifier, User $userModel): ?array
+    {
+        $identifier = trim($identifier);
+        if ($identifier === '') {
+            return null;
+        }
+
+        $user = match ($type) {
+            'email'    => $userModel->findByEmail($identifier) ?: null,
+            'username' => $userModel->findByUsername($identifier) ?: null,
+            'phone'    => $userModel->findByPhone($identifier) ?: null,
+            'student_id' => (function () use ($identifier, $userModel) {
+                $student = (new Student())->findByAdmissionNumber($identifier);
+                return ($student && !empty($student['user_id'])) ? ($userModel->find($student['user_id']) ?: null) : null;
+            })(),
+            'employee_id' => (function () use ($identifier, $userModel) {
+                $teacher = (new Teacher())->findByEmployeeNumber($identifier);
+                if ($teacher && !empty($teacher['user_id'])) {
+                    $user = $userModel->find($teacher['user_id']);
+                    if ($user) {
+                        return $user;
+                    }
+                }
+                return $userModel->findByEmployeeCode($identifier) ?: null;
+            })(),
+            default => null,
+        };
+
+        return $user ?: null;
+    }
+
+    /** Finalizes a login that already passed all credential/2FA checks. */
+    public static function completeLogin(array $user, bool $remember = false): void
+    {
+        $userModel = new User();
+        self::login($user);
+        if ($remember) {
+            self::setRememberCookie($user, $userModel);
+        }
+        $userModel->update($user['id'], ['last_login_at' => date('Y-m-d H:i:s')]);
+
+        if (Settings::bool('login_alert_email_enabled', false) && !empty($user['email']) && Mailer::isConfigured()) {
+            $when = date('d M Y, h:i A');
+            $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+            $html = "<p>Hi {$user['full_name']},</p><p>Your School ERP account was just signed in to on {$when} from IP {$ip}.</p>"
+                . "<p>If this wasn't you, please change your password immediately and contact your administrator.</p>";
+            Mailer::send($user['email'], $user['full_name'], 'New sign-in to your School ERP account', $html);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Phone + OTP login (passwordless) — used by the "Phone + OTP" login tab.
+    // ------------------------------------------------------------------
+
+    /** @return array{ok: bool, message: string} */
+    public static function startPhoneOtpLogin(string $phone): array
+    {
+        $user = (new User())->findByPhone(trim($phone));
+        if (!$user) {
+            return ['ok' => false, 'message' => 'No account found with that phone number.'];
+        }
+        if ((int) $user['is_active'] !== 1) {
+            return ['ok' => false, 'message' => 'Your account is inactive. Please contact your administrator.'];
+        }
+        if (self::isAccountLocked($user)) {
+            $mins = self::lockoutRemainingMinutes($user);
+            return ['ok' => false, 'message' => "Too many failed attempts. Please try again in {$mins} minute(s)."];
+        }
+
+        $code = Otp::generate((int) $user['id'], 'sms', $user['phone'], 'login_phone');
+        $ttl = Settings::int('otp_ttl_minutes', config('otp.ttl_minutes', 10));
+        Sms::send($user['phone'], "Your School ERP login code is {$code}. It expires in {$ttl} minutes.");
+        Session::set('phone_login_user_id', $user['id']);
+
+        return ['ok' => true, 'message' => 'A login code has been sent to your phone.'];
+    }
+
+    /** @return array{status: string, user: ?array, message: ?string} */
+    public static function verifyPhoneOtpLogin(string $phone, string $code, bool $remember = false): array
+    {
+        $userId = Session::get('phone_login_user_id');
+        $user = $userId ? (new User())->find($userId) : null;
+        if (!$user || trim($phone) !== $user['phone']) {
+            return ['status' => 'invalid', 'user' => null, 'message' => 'Please request a new code.'];
+        }
+
+        $result = Otp::verify((int) $user['id'], 'sms', 'login_phone', $code);
+        if (!$result['ok']) {
+            return ['status' => 'invalid', 'user' => null, 'message' => $result['message']];
+        }
+
+        Session::remove('phone_login_user_id');
+        (new User())->resetFailedAttempts((int) $user['id']);
+
+        if (!empty($user['two_factor_enabled'])) {
+            Session::set('pending_2fa_user_id', $user['id']);
+            Session::set('pending_2fa_remember', $remember);
+            return ['status' => '2fa_required', 'user' => $user, 'message' => null];
+        }
+
+        self::completeLogin($user, $remember);
+        return ['status' => 'ok', 'user' => $user, 'message' => null];
+    }
+
+    // ------------------------------------------------------------------
+    // Two-Factor Authentication — completing a login that was parked at
+    // '2fa_required' by attemptByIdentifier()/verifyPhoneOtpLogin().
+    // ------------------------------------------------------------------
+
+    public static function hasPending2fa(): bool
+    {
+        return Session::has('pending_2fa_user_id');
+    }
+
+    /** @return array{ok: bool, message: ?string} */
+    public static function completePending2fa(string $code): array
+    {
+        $userId = Session::get('pending_2fa_user_id');
+        $user = $userId ? (new User())->find($userId) : null;
+        if (!$user) {
+            return ['ok' => false, 'message' => 'Your login session has expired. Please log in again.'];
+        }
+
+        $remember = (bool) Session::get('pending_2fa_remember', false);
+        $verified = !empty($user['two_factor_secret']) && TwoFactor::verify($user['two_factor_secret'], $code);
+
+        if (!$verified && !empty($user['two_factor_recovery_codes'])) {
+            $remainingJson = TwoFactor::consumeRecoveryCode($user['two_factor_recovery_codes'], $code);
+            if ($remainingJson !== null) {
+                (new User())->update((int) $user['id'], ['two_factor_recovery_codes' => $remainingJson]);
+                $verified = true;
+            }
+        }
+
+        if (!$verified) {
+            return ['ok' => false, 'message' => 'Invalid authentication code. Please try again.'];
+        }
+
+        Session::remove('pending_2fa_user_id');
+        Session::remove('pending_2fa_remember');
+        self::completeLogin($user, $remember);
+        return ['ok' => true, 'message' => null];
     }
 }
