@@ -18,6 +18,7 @@
             <table class="table table-hover align-middle">
                 <thead>
                     <tr>
+                        <th>S.N.</th>
                         <th>Photo</th>
                         <th>Name</th>
                         <th>Country</th>
@@ -28,10 +29,11 @@
                 </thead>
                 <tbody>
                     <?php if (empty($result['data'])): ?>
-                        <tr><td colspan="6" class="text-center text-muted py-4">No authors found.</td></tr>
+                        <tr><td colspan="7" class="text-center text-muted py-4">No authors found.</td></tr>
                     <?php else: ?>
-                        <?php foreach ($result['data'] as $author): ?>
+                        <?php foreach ($result['data'] as $i => $author): ?>
                         <tr>
+                            <td><?= (($result['page'] - 1) * $result['per_page']) + $i + 1 ?></td>
                             <td>
                                 <?php if (!empty($author['photo'])): ?>
                                     <img src="<?= e(url($author['photo'])) ?>" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:50%">

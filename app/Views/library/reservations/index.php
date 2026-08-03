@@ -11,6 +11,7 @@
                 <table class="table table-hover align-middle">
                     <thead>
                         <tr>
+                            <th>S.N.</th>
                             <th>Book</th>
                             <th>Borrower</th>
                             <th>Reserved Date</th>
@@ -18,8 +19,9 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($reservations as $row): ?>
+                        <?php foreach ($reservations as $i => $row): ?>
                         <tr>
+                            <td><?= $i + 1 ?></td>
                             <td><?= e($row['book_title']) ?></td>
                             <td><?= e($row['student_name'] ?? $row['teacher_name'] ?? '—') ?></td>
                             <td><?= e($row['reserved_date']) ?></td>

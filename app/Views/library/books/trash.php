@@ -12,6 +12,7 @@
                 <table class="table table-hover align-middle">
                     <thead>
                         <tr>
+                            <th>S.N.</th>
                             <th>Book Name</th>
                             <th>ISBN</th>
                             <th>Author</th>
@@ -20,8 +21,9 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($result['data'] as $row): ?>
+                        <?php foreach ($result['data'] as $i => $row): ?>
                         <tr>
+                            <td><?= (($result['page'] - 1) * $result['per_page']) + $i + 1 ?></td>
                             <td><?= e($row['title']) ?></td>
                             <td><code><?= e($row['isbn'] ?? '—') ?></code></td>
                             <td><?= e($row['author_name'] ?? '—') ?></td>

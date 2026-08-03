@@ -246,6 +246,10 @@ class LibraryController extends Controller
             ];
         }
 
+        if (array_key_exists($type, self::HISTORY_TYPES)) {
+            return $this->historyExportDataset($type);
+        }
+
         $payload = $this->dashboardPayload();
 
         return match ($type) {
@@ -340,6 +344,65 @@ class LibraryController extends Controller
             ],
             default => null,
         };
+    }
+
+    /**
+     * Export datasets for the /library/history/{type} pages (Excel/PDF/Print
+     * buttons). Unlike the dashboard-widget cases above (which export the
+     * on-screen 10 rows), this re-runs the same query the history page
+     * used — honoring whatever search/date filters are currently applied —
+     * with a page size large enough to be effectively "all matching rows".
+     */
+    private function historyExportDataset(string $type): ?array
+    {
+        $config = self::HISTORY_TYPES[$type] ?? null;
+        if ($config === null) {
+            return null;
+        }
+
+        $search = trim((string) $this->input('search', ''));
+        $fromDate = trim((string) $this->input('from_date', ''));
+        $toDate = trim((string) $this->input('to_date', ''));
+        if (!empty($config['default_today']) && $fromDate === '' && $toDate === '') {
+            $fromDate = $toDate = date('Y-m-d');
+        }
+        $allRows = 1_000_000;
+
+        if ($config['mode'] === 'activity') {
+            $rows = $this->formatActivityFeed((new LibraryActivity())->history($config['types'], 1, $allRows, $fromDate, $toDate)['data']);
+            return [
+                'title' => $config['title'],
+                'headers' => ['Date & Time', 'Event', 'Book', 'ISBN', 'By'],
+                'rows' => array_map(static fn($r) => [
+                    format_datetime($r['activity_at']), $r['label'], (string) ($r['book_title'] ?? ''),
+                    (string) ($r['isbn'] ?? ''), (string) $r['display_user'],
+                ], $rows),
+            ];
+        }
+
+        if ($config['mode'] === 'fine') {
+            $rows = (new LibraryFinePayment())->paginateHistory(1, $allRows, $search, $fromDate, $toDate)['data'];
+            return [
+                'title' => $config['title'],
+                'headers' => ['Receipt No.', 'Paid At', 'Book', 'Borrower', 'Amount', 'Mode', 'Received By'],
+                'rows' => array_map(static fn($r) => [
+                    (string) $r['receipt_number'], format_datetime($r['paid_at']), (string) $r['book_title'],
+                    $r['student_name'] ?? $r['teacher_name'] ?? '—', format_currency($r['amount']),
+                    PAYMENT_MODES[$r['payment_mode']] ?? ucfirst((string) $r['payment_mode']), (string) ($r['received_by_name'] ?? ''),
+                ], $rows),
+            ];
+        }
+
+        $rows = (new BookIssue())->paginateHistory($config['scope'], 1, $allRows, $search, $fromDate, $toDate)['data'];
+        return [
+            'title' => $config['title'],
+            'headers' => ['Book', 'ISBN', 'Borrower', 'Issue Date', 'Due Date', 'Return Date', 'Status', 'Days Overdue', 'Fine'],
+            'rows' => array_map(static fn($r) => [
+                (string) $r['book_title'], (string) ($r['isbn'] ?? ''), $r['student_name'] ?? $r['teacher_name'] ?? '—',
+                (string) $r['issue_date'], (string) $r['due_date'], (string) ($r['return_date'] ?? ''),
+                ucfirst((string) $r['status']), (string) $r['days_overdue'], format_currency($r['fine_amount'] ?? 0),
+            ], $rows),
+        ];
     }
 
     private function exportCsv(string $title, array $headers, array $rows): void
@@ -1207,6 +1270,118 @@ class LibraryController extends Controller
         $this->view('library/return', ['pageTitle' => 'Return Book']);
     }
 
+    // ------------------------------------------------------------------
+    // History — the "View History" screens behind the dashboard stat
+    // cards. Every card links here with its own $type instead of to a
+    // generic list/management screen, so a librarian can always see the
+    // full, dated, filterable trail behind whatever number they clicked
+    // on — not just the current snapshot.
+    //
+    // Two data sources, depending on $type:
+    //  - 'activity' mode (books/copies): LibraryActivity::history(), the
+    //    same feed that powers "Recent Library Activities", filtered to
+    //    the relevant activity_type(s).
+    //  - 'issue' mode (available/issued/returned/overdue/lost): BookIssue::
+    //    paginateHistory(), scoped to the relevant loan status.
+    //  - 'fine' mode (fine collected): LibraryFinePayment::paginate().
+    // ------------------------------------------------------------------
+
+    private const HISTORY_TYPES = [
+        'total-books' => [
+            'mode' => 'activity',
+            'types' => ['book_added', 'book_updated', 'book_deleted'],
+            'title' => 'Total Books — History',
+            'description' => 'Every book added, edited, or removed from the catalog, which is what moves the Total Books count.',
+        ],
+        'total-copies' => [
+            'mode' => 'activity',
+            'types' => ['book_added', 'book_updated', 'book_deleted'],
+            'title' => 'Total Book Copies — History',
+            'description' => 'Copy counts are set when a book is added or edited, so this shows the same add/edit/remove trail as Total Books.',
+        ],
+        'available-books' => [
+            'mode' => 'issue',
+            'scope' => '',
+            'title' => 'Available Books — History',
+            'description' => 'Every issue, return, and lost-book event — each one moves the Available Books count up or down.',
+        ],
+        'issued-books' => [
+            'mode' => 'issue',
+            'scope' => 'issued',
+            'title' => 'Issued Books — History',
+            'description' => 'Every book currently out on loan.',
+        ],
+        'returned-books' => [
+            'mode' => 'issue',
+            'scope' => 'returned',
+            'title' => 'Returned Books — History',
+            'description' => 'Every book returned, most recent first. Defaults to today — widen the date range to see earlier returns.',
+            'default_today' => true,
+        ],
+        'overdue-books' => [
+            'mode' => 'issue',
+            'scope' => 'overdue',
+            'title' => 'Overdue Books — History',
+            'description' => 'Loans currently overdue, plus loans that were returned after their due date.',
+        ],
+        'lost-books' => [
+            'mode' => 'issue',
+            'scope' => 'lost',
+            'title' => 'Lost Books — History',
+            'description' => 'Every book reported lost.',
+        ],
+        'fine-collected' => [
+            'mode' => 'fine',
+            'title' => 'Fine Collected — History',
+            'description' => 'Every library fine payment received. Defaults to today — widen the date range to see earlier collections.',
+            'default_today' => true,
+        ],
+    ];
+
+    public function history(string $type): void
+    {
+        $config = self::HISTORY_TYPES[$type] ?? null;
+        if ($config === null) {
+            http_response_code(404);
+            require dirname(__DIR__) . '/Views/errors/404.php';
+            return;
+        }
+
+        $search = trim((string) $this->input('search', ''));
+        $fromDate = trim((string) $this->input('from_date', ''));
+        $toDate = trim((string) $this->input('to_date', ''));
+        // A few cards (Returned Today, Fine Collected Today) are inherently
+        // "today" numbers — land on today's slice by default, but only
+        // when the librarian hasn't already chosen a date range.
+        if (!empty($config['default_today']) && $fromDate === '' && $toDate === '') {
+            $fromDate = $toDate = date('Y-m-d');
+        }
+        $perPage = $this->perPageChoice();
+        $page = $this->currentPage();
+
+        if ($config['mode'] === 'activity') {
+            $result = (new LibraryActivity())->history($config['types'], $page, $perPage, $fromDate, $toDate);
+            $result['data'] = $this->formatActivityFeed($result['data']);
+        } elseif ($config['mode'] === 'fine') {
+            $result = (new LibraryFinePayment())->paginateHistory($page, $perPage, $search, $fromDate, $toDate);
+        } else {
+            $result = (new BookIssue())->paginateHistory($config['scope'], $page, $perPage, $search, $fromDate, $toDate);
+        }
+
+        $this->view('library/history', [
+            'pageTitle' => $config['title'],
+            'mode' => $config['mode'],
+            'description' => $config['description'],
+            'historyType' => $type,
+            'result' => $result,
+            'rows' => $result['data'],
+            'search' => $search,
+            'fromDate' => $fromDate,
+            'toDate' => $toDate,
+            'perPage' => $perPage,
+        ]);
+    }
+
     /**
      * Validates the payment info submitted for a fine *before* it's collected —
      * a valid, known payment mode, and (for anything but cash) a non-blank
@@ -1265,7 +1440,7 @@ class LibraryController extends Controller
             }
 
             try {
-                $receiptNumber = $this->collectFine($issueId, $issue, $fine, $mode, $reference);
+                $receiptNumber = $this->collectFine($issueId, $issue, $fine, $mode, $reference, 'Book Return');
             } catch (\Throwable $e) {
                 error_log('[LIBRARY FINE COLLECTION FAILED] loan #' . $issueId . ': ' . $e->getMessage());
                 $this->flashError('The fine could not be collected due to a server error. The book was not returned — please try again.');
@@ -1372,7 +1547,7 @@ class LibraryController extends Controller
         }
 
         try {
-            $receiptNumber = $this->collectFine($issueId, $issue, $amount, $mode, $reference);
+            $receiptNumber = $this->collectFine($issueId, $issue, $amount, $mode, $reference, 'Pay Fine');
         } catch (\Throwable $e) {
             error_log('[LIBRARY FINE COLLECTION FAILED] loan #' . $issueId . ': ' . $e->getMessage());
             $this->flashError('The fine could not be collected due to a server error. Please try again.');
@@ -1396,8 +1571,13 @@ class LibraryController extends Controller
      * returnBook()/renewBook() when they collect a fine as part of closing
      * out or extending an overdue loan — so there is exactly one place that
      * writes a fine payment record.
+     *
+     * $context labels *why* the fine was being collected right now (book
+     * return / book renewal / a standalone Pay Fine) — stored in `notes` so
+     * the "Fine Collected Today" detail page can show it instead of just an
+     * amount.
      */
-    private function collectFine(int $issueId, array $issue, float $amount, string $mode, string $reference): string
+    private function collectFine(int $issueId, array $issue, float $amount, string $mode, string $reference, string $context = 'Fine payment'): string
     {
         $receiptNumber = (new Payment())->nextReceiptNumber();
 
@@ -1410,6 +1590,7 @@ class LibraryController extends Controller
             'reference_number' => $reference ?: null,
             'receipt_number' => $receiptNumber,
             'received_by' => Auth::id(),
+            'notes' => $context,
             'paid_at' => date('Y-m-d H:i:s'),
         ]);
 
@@ -1417,6 +1598,16 @@ class LibraryController extends Controller
 
         return $receiptNumber;
     }
+
+    /** Every library fine collected today, with student/teacher + book title joined in, for the "Fine Collected Today" dashboard card. */
+    public function fineCollectedToday(): void
+    {
+        $this->view('library/fine-collected-today', [
+            'pageTitle' => 'Fine Collected Today',
+            'payments'  => (new LibraryFinePayment())->today(),
+        ]);
+    }
+
 
     /**
      * Confirms a fine payment actually exists for this loan, rather than
@@ -1493,7 +1684,7 @@ class LibraryController extends Controller
             }
 
             try {
-                $receiptNumber = $this->collectFine($issueId, $issue, $fine, $mode, $reference);
+                $receiptNumber = $this->collectFine($issueId, $issue, $fine, $mode, $reference, 'Book Renewal');
             } catch (\Throwable $e) {
                 error_log('[LIBRARY FINE COLLECTION FAILED] loan #' . $issueId . ': ' . $e->getMessage());
                 $this->flashError('The fine could not be collected due to a server error. The book was not renewed — please try again.');

@@ -130,6 +130,109 @@ class BookIssue extends Model
         ];
     }
 
+    /**
+     * Paginated, searchable, date-filtered loan history — powers the
+     * dashboard stat cards' "History" pages (Issued/Returned/Overdue/Lost/
+     * Available Books). Unlike paginateActive() (currently-issued only,
+     * used by the actionable "Issued Books" management screen), this can
+     * scope to any status, or every status at once for the combined
+     * "Available Books" history (every event that moved the available-copy
+     * count: issue, return, or loss).
+     *
+     * @param string $scope one of '' (all statuses), 'issued', 'returned', 'lost', 'overdue'
+     *                      ('overdue' = currently overdue, or returned later than due)
+     */
+    public function paginateHistory(string $scope, int $page, int $perPage, string $search = '', string $fromDate = '', string $toDate = ''): array
+    {
+        // The "event date" a row is filtered/sorted by depends on its
+        // status: an issued loan's event is when it was issued; a
+        // returned/lost loan's event is when it was returned/lost.
+        $eventAtSql = "CASE
+                WHEN bi.status = 'returned' THEN COALESCE(bi.returned_at, TIMESTAMP(bi.return_date))
+                WHEN bi.status = 'lost' THEN COALESCE(bi.returned_at, bi.created_at)
+                ELSE bi.created_at
+            END";
+
+        $where = [];
+        $params = [];
+
+        if ($scope === 'issued') {
+            $where[] = "bi.status = 'issued'";
+        } elseif ($scope === 'returned') {
+            $where[] = "bi.status = 'returned'";
+        } elseif ($scope === 'lost') {
+            $where[] = "bi.status = 'lost'";
+        } elseif ($scope === 'overdue') {
+            $where[] = "((bi.status = 'issued' AND bi.due_date < CURDATE())
+                          OR (bi.status = 'returned' AND bi.return_date > bi.due_date))";
+        }
+        // '' (all statuses) — no status filter, used for "Available Books" history.
+
+        if ($search !== '') {
+            $where[] = "(b.title LIKE :search1 OR b.accession_number LIKE :search2
+                         OR s.full_name LIKE :search3 OR s.admission_number LIKE :search4
+                         OR te.full_name LIKE :search5 OR te.employee_number LIKE :search6)";
+            $like = "%{$search}%";
+            $params['search1'] = $like;
+            $params['search2'] = $like;
+            $params['search3'] = $like;
+            $params['search4'] = $like;
+            $params['search5'] = $like;
+            $params['search6'] = $like;
+        }
+        if ($fromDate !== '') {
+            $where[] = "({$eventAtSql}) >= :from_date";
+            $params['from_date'] = $fromDate . ' 00:00:00';
+        }
+        if ($toDate !== '') {
+            $where[] = "({$eventAtSql}) <= :to_date";
+            $params['to_date'] = $toDate . ' 23:59:59';
+        }
+
+        $whereSql = $where === [] ? '1=1' : implode(' AND ', $where);
+        $joinSql = "FROM `book_issues` bi
+                     JOIN `books` b ON b.id = bi.book_id
+                     LEFT JOIN `students` s ON s.id = bi.student_id
+                     LEFT JOIN `teachers` te ON te.id = bi.teacher_id
+                     WHERE {$whereSql}";
+
+        $total = (int) ($this->raw("SELECT COUNT(*) AS c {$joinSql}", $params)[0]['c'] ?? 0);
+
+        $offset = ($page - 1) * $perPage;
+        $sql = "SELECT bi.*, b.title AS book_title, b.accession_number, b.isbn,
+                        s.full_name AS student_name, s.admission_number,
+                        te.full_name AS teacher_name, te.employee_number,
+                        {$eventAtSql} AS event_at,
+                        CASE WHEN bi.status = 'issued' AND bi.due_date < CURDATE()
+                             THEN DATEDIFF(CURDATE(), bi.due_date) ELSE 0 END AS days_overdue
+                 {$joinSql}
+                 ORDER BY event_at DESC
+                 LIMIT {$perPage} OFFSET {$offset}";
+
+        $data = $this->raw($sql, $params);
+
+        // Same live-fine projection as paginateActive()/overdueList(): a
+        // still-open overdue loan's fine_amount isn't finalized in the DB
+        // until it's actually returned.
+        if (!empty($data)) {
+            $finePerDay = (float) ((new LibrarySetting())->current()['fine_per_day'] ?? 0);
+            foreach ($data as &$row) {
+                if ((int) $row['days_overdue'] > 0) {
+                    $row['fine_amount'] = round((int) $row['days_overdue'] * $finePerDay, 2);
+                }
+            }
+            unset($row);
+        }
+
+        return [
+            'data' => $data,
+            'total' => $total,
+            'page' => $page,
+            'per_page' => $perPage,
+            'last_page' => max(1, (int) ceil($total / max(1, $perPage))),
+        ];
+    }
+
     public function historyForStudent(int $studentId): array
     {
         return $this->raw(

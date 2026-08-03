@@ -306,40 +306,33 @@ class AuthController extends Controller
 
     public function sendResetOtp(): void
     {
-        // Which identifying field we require depends on the chosen channel:
-        // email lookups use the email field, SMS lookups use the phone field.
-        $channel = $this->input('channel');
-
-        if ($channel === 'sms') {
-            $data = $this->validate([
-                'phone'   => 'required',
-                'channel' => 'required|in:email,sms',
-            ]);
-        } else {
-            $data = $this->validate([
-                'email'   => 'required|email',
-                'channel' => 'required|in:email,sms',
-            ]);
-        }
-
-        if ($data['channel'] === 'email' && !Mailer::isConfigured()) {
-            Session::flash('error', 'Email sending is not configured on this server yet. Please contact your administrator, or see Settings > Mail Setup.');
-            $this->redirect(url('forgot-password'));
-            return;
-        }
-
-        $userModel = new User();
-        $user = $data['channel'] === 'sms'
-            ? $userModel->findByPhone($data['phone'])
-            : $userModel->findByEmail($data['email']);
+        $data = $this->validate([
+            'channel' => 'required|in:email,sms',
+        ]);
+        $channel = $data['channel'];
         $ttl = config('otp.ttl_minutes', 10);
+        $userModel = new User();
+
+        if ($channel === 'email') {
+            if (!Mailer::isConfigured()) {
+                Session::flash('error', 'Email sending is not configured on this server yet. Please contact your administrator, or see Settings > Mail Setup.');
+                $this->redirect(url('forgot-password'));
+                return;
+            }
+            $emailData = $this->validate(['email' => 'required|email']);
+            $user = $userModel->findByEmail($emailData['email']);
+        } else {
+            // SMS channel looks the account up by the mobile number entered,
+            // not by email — the phone on file is also what the code is sent to.
+            $phoneData = $this->validate(['phone' => 'required|phone']);
+            $user = $userModel->findByPhone($phoneData['phone']);
+        }
 
         $sendFailed = false;
         $sendError = null;
 
-        // SMS looks the account up by the mobile number entered; email is always available.
         if ($user) {
-            if ($data['channel'] === 'sms') {
+            if ($channel === 'sms') {
                 $code = Otp::generate((int) $user['id'], 'sms', $user['phone']);
                 Sms::send($user['phone'], "Your School ERP password reset code is {$code}. It expires in {$ttl} minutes.");
             } else {
@@ -356,7 +349,7 @@ class AuthController extends Controller
             }
 
             Session::set('pwreset_otp_user_id', $user['id']);
-            Session::set('pwreset_otp_channel', $data['channel']);
+            Session::set('pwreset_otp_channel', $channel);
         }
 
         if ($sendFailed) {

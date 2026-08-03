@@ -342,6 +342,8 @@ return function (Router $router): void {
     // ------------------------------------------------------------
     $router->get('/library', [LibraryController::class, 'index'], ['auth']);
     $router->get('/library/dashboard-data', [LibraryController::class, 'refreshBody'], ['auth']);
+    $router->get('/library/fine-collected-today', [LibraryController::class, 'fineCollectedToday'], ['auth']);
+    $router->get('/library/history/{type}', [LibraryController::class, 'history'], ['auth']);
     $router->get('/library/export/{type}', [LibraryController::class, 'exportTable'], ['auth']);
 
     $router->get('/library/books', [LibraryController::class, 'books'], ['auth']);

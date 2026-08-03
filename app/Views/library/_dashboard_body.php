@@ -15,14 +15,14 @@
     <div class="row g-3 mb-3">
         <?php
     $statCards = [
-        ['icon' => 'bi-book-fill',            'color' => 'primary',   'value' => $counts['total_books'] ?? 0,        'label' => 'Total Books',        'url' => 'library/books'],
-        ['icon' => 'bi-collection-fill',      'color' => 'info',      'value' => $counts['total_copies'] ?? 0,       'label' => 'Total Book Copies',   'url' => 'library/books'],
-        ['icon' => 'bi-check-circle-fill',    'color' => 'success',   'value' => $counts['total_available'] ?? 0,    'label' => 'Available Books',     'url' => 'library/books?availability=available'],
-        ['icon' => 'bi-arrow-left-right',     'color' => 'warning',   'value' => $counts['total_issued'] ?? 0,       'label' => 'Issued Books',        'url' => 'library/transactions'],
-        ['icon' => 'bi-box-arrow-in-left',    'color' => 'success',   'value' => $counts['returned_today'] ?? 0,     'label' => 'Returned Today',      'url' => 'library/transactions'],
-        ['icon' => 'bi-exclamation-triangle-fill', 'color' => 'danger', 'value' => $counts['total_overdue'] ?? 0,    'label' => 'Overdue Books',        'url' => 'library/transactions'],
-        ['icon' => 'bi-cash-coin',            'color' => 'success',   'value' => format_currency($counts['fine_collected_today'] ?? 0), 'label' => 'Fine Collected Today', 'url' => 'library/transactions', 'is_currency' => true],
-        ['icon' => 'bi-x-octagon-fill',       'color' => 'secondary', 'value' => $counts['total_lost'] ?? 0,         'label' => 'Lost Books',          'url' => 'library/transactions'],
+        ['icon' => 'bi-book-fill',            'color' => 'primary',   'value' => $counts['total_books'] ?? 0,        'label' => 'Total Books',        'url' => 'library/history/total-books'],
+        ['icon' => 'bi-collection-fill',      'color' => 'info',      'value' => $counts['total_copies'] ?? 0,       'label' => 'Total Book Copies',   'url' => 'library/history/total-copies'],
+        ['icon' => 'bi-check-circle-fill',    'color' => 'success',   'value' => $counts['total_available'] ?? 0,    'label' => 'Available Books',     'url' => 'library/history/available-books'],
+        ['icon' => 'bi-arrow-left-right',     'color' => 'warning',   'value' => $counts['total_issued'] ?? 0,       'label' => 'Issued Books',        'url' => 'library/history/issued-books'],
+        ['icon' => 'bi-box-arrow-in-left',    'color' => 'success',   'value' => $counts['returned_today'] ?? 0,     'label' => 'Returned Today',      'url' => 'library/history/returned-books'],
+        ['icon' => 'bi-exclamation-triangle-fill', 'color' => 'danger', 'value' => $counts['total_overdue'] ?? 0,    'label' => 'Overdue Books',        'url' => 'library/history/overdue-books'],
+        ['icon' => 'bi-cash-coin',            'color' => 'success',   'value' => format_currency($counts['fine_collected_today'] ?? 0), 'label' => 'Fine Collected Today', 'url' => 'library/history/fine-collected', 'is_currency' => true],
+        ['icon' => 'bi-x-octagon-fill',       'color' => 'secondary', 'value' => $counts['total_lost'] ?? 0,         'label' => 'Lost Books',          'url' => 'library/history/lost-books'],
         ['icon' => 'bi-people-fill',          'color' => 'primary',   'value' => $counts['total_students'] ?? 0,     'label' => 'Total Students',      'url' => 'students'],
         ['icon' => 'bi-person-check-fill',    'color' => 'info',      'value' => $counts['active_members'] ?? 0,     'label' => 'Active Members',      'url' => 'library/transactions'],
         ['icon' => 'bi-tags-fill',            'color' => 'secondary', 'value' => $counts['total_categories'] ?? 0,   'label' => 'Categories',          'url' => 'library/categories'],

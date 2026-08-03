@@ -18,6 +18,7 @@
             <table class="table table-hover align-middle">
                 <thead>
                     <tr>
+                        <th>S.N.</th>
                         <th>Logo</th>
                         <th>Name</th>
                         <th>Email</th>
@@ -29,10 +30,11 @@
                 </thead>
                 <tbody>
                     <?php if (empty($result['data'])): ?>
-                        <tr><td colspan="7" class="text-center text-muted py-4">No publishers found.</td></tr>
+                        <tr><td colspan="8" class="text-center text-muted py-4">No publishers found.</td></tr>
                     <?php else: ?>
-                        <?php foreach ($result['data'] as $pub): ?>
+                        <?php foreach ($result['data'] as $i => $pub): ?>
                         <tr>
+                            <td><?= (($result['page'] - 1) * $result['per_page']) + $i + 1 ?></td>
                             <td>
                                 <?php if (!empty($pub['logo'])): ?>
                                     <img src="<?= e(url($pub['logo'])) ?>" alt="" style="width:36px;height:36px;object-fit:contain;">

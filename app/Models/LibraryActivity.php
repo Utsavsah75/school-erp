@@ -32,7 +32,63 @@ class LibraryActivity extends Model
      */
     public function recent(int $limit = 10): array
     {
-        $sql = "
+        return $this->raw(self::feedSql() . " ORDER BY activity_at DESC LIMIT " . (int) $limit);
+    }
+
+    /**
+     * Paginated, date-filtered, activity_type-filtered version of recent() —
+     * powers the dashboard stat cards' "History" pages (e.g. Total Books,
+     * Total Book Copies) via LibraryController::history(). Wraps the same
+     * feed SQL in a subquery so it can be filtered/paginated without
+     * duplicating the 11-way UNION.
+     *
+     * @param string[] $types activity_type values to include (e.g. ['book_added','book_updated','book_deleted'])
+     * @return array{data:array<int,array>,total:int,page:int,per_page:int,last_page:int}
+     */
+    public function history(array $types, int $page, int $perPage, string $fromDate = '', string $toDate = ''): array
+    {
+        $typeParams = [];
+        $typePlaceholders = [];
+        foreach (array_values($types) as $i => $type) {
+            $key = "type{$i}";
+            $typePlaceholders[] = ":{$key}";
+            $typeParams[$key] = $type;
+        }
+        $where = ['t.activity_type IN (' . implode(',', $typePlaceholders) . ')'];
+        $params = $typeParams;
+
+        if ($fromDate !== '') {
+            $where[] = 't.activity_at >= :from_date';
+            $params['from_date'] = $fromDate . ' 00:00:00';
+        }
+        if ($toDate !== '') {
+            $where[] = 't.activity_at <= :to_date';
+            $params['to_date'] = $toDate . ' 23:59:59';
+        }
+        $whereSql = implode(' AND ', $where);
+
+        $feedSql = self::feedSql();
+        $total = (int) ($this->raw("SELECT COUNT(*) AS c FROM ({$feedSql}) t WHERE {$whereSql}", $params)[0]['c'] ?? 0);
+
+        $offset = ($page - 1) * $perPage;
+        $data = $this->raw(
+            "SELECT * FROM ({$feedSql}) t WHERE {$whereSql} ORDER BY t.activity_at DESC LIMIT {$perPage} OFFSET {$offset}",
+            $params
+        );
+
+        return [
+            'data' => $data,
+            'total' => $total,
+            'page' => $page,
+            'per_page' => $perPage,
+            'last_page' => max(1, (int) ceil($total / max(1, $perPage))),
+        ];
+    }
+
+    /** The 11-way UNION that both recent() and history() select from (no ORDER BY/LIMIT — callers add their own). */
+    private static function feedSql(): string
+    {
+        return "
             (SELECT bi.created_at AS activity_at, 'issued' AS activity_type, 'book_issue' AS entity_type, bi.id AS entity_id,
                     b.title AS book_title, b.isbn, b.cover_image,
                     COALESCE(s.full_name, te.full_name) AS borrower_name, s.admission_number,
@@ -150,10 +206,6 @@ class LibraryActivity extends Model
              FROM `students` s
              LEFT JOIN `users` uu ON uu.id = s.updated_by
              WHERE s.updated_at IS NOT NULL AND s.updated_at > s.created_at)
-
-            ORDER BY activity_at DESC
-            LIMIT " . (int) $limit;
-
-        return $this->raw($sql);
+        ";
     }
 }

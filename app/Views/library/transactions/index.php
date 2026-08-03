@@ -34,6 +34,7 @@
                 <table class="table table-hover align-middle">
                     <thead>
                         <tr>
+                            <th>S.N.</th>
                             <th>Book</th>
                             <th>ISBN</th>
                             <th>Accession No.</th>
@@ -47,8 +48,9 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($transactions as $row): ?>
+                        <?php foreach ($transactions as $i => $row): ?>
                         <tr>
+                            <td><?= (($result['page'] - 1) * $result['per_page']) + $i + 1 ?></td>
                             <td><?= e($row['book_title']) ?></td>
                             <td><code><?= e($row['isbn'] ?: '—') ?></code></td>
                             <td><code><?= e($row['accession_number']) ?></code></td>
