@@ -11,6 +11,7 @@ use App\Models\ClassModel;
 use App\Models\Fee;
 use App\Models\FeeDiscount;
 use App\Models\FeeFine;
+use App\Models\LibraryFinePayment;
 use App\Models\Payment;
 use App\Models\Section;
 use App\Models\Student;
@@ -71,11 +72,21 @@ class PaymentController extends Controller
 
         $report = (new Payment())->dailyCollection($date);
 
+        // Folded in alongside fee payments so this page fully explains the
+        // dashboard's "Collected Today" figure, which is fees + library fines
+        // combined — clicking that card lands here.
+        $fineModel = new LibraryFinePayment();
+        $fineRows = $fineModel->forDate($date);
+        $fineTotal = array_sum(array_map(static fn ($r) => (float) $r['amount'], $fineRows));
+
         $this->view('payments/daily-collection', [
             'pageTitle' => 'Daily Collection Report',
             'date'      => $date,
             'report'    => $report,
             'paymentModes' => Payment::PAYMENT_MODES,
+            'fineRows'  => $fineRows,
+            'fineTotal' => $fineTotal,
+            'grandTotal' => $report['total'] + $fineTotal,
         ]);
     }
 
@@ -295,7 +306,13 @@ class PaymentController extends Controller
         }
 
         if ($count > 0) {
-            log_activity('payment_recorded', "Recorded payment of Rs. " . number_format($totalPosted, 2) . " for student #{$studentId} across {$count} fee row(s), receipt {$receiptGroup}.");
+            log_activity('payment_recorded', "Recorded payment of Rs. " . number_format($totalPosted, 2) . " for student #{$studentId} across {$count} fee row(s), receipt {$receiptGroup}.", [
+                'module' => 'Fee Payments', 'record_id' => $studentId, 'record_name' => "Student #{$studentId} — Receipt {$receiptGroup}",
+                'new' => [
+                    'amount' => $totalPosted, 'payment_mode' => $paymentMode, 'fee_rows' => $count,
+                    'receipt_group' => $receiptGroup, 'reference_number' => $referenceNumber ?: null, 'paid_at' => $paidAt,
+                ],
+            ]);
             $this->flashSuccess("Payment of " . format_currency($totalPosted) . " recorded successfully. Receipt: {$receiptGroup}.");
             $this->redirect(url('payments/collect') . '?student_id=' . $studentId . '&receipt=' . urlencode($receiptGroup));
         } else {
@@ -374,7 +391,11 @@ class PaymentController extends Controller
 
         $ok = (new Payment())->void($paymentId, (int) Auth::id(), $reason);
         if ($ok) {
-            log_activity('payment_voided', "Voided payment #{$paymentId} (receipt {$payment['receipt_number']}): {$reason}");
+            log_activity('payment_voided', "Voided payment #{$paymentId} (receipt {$payment['receipt_number']}): {$reason}", [
+                'module' => 'Fee Payments', 'record_id' => $paymentId, 'record_name' => "Receipt {$payment['receipt_number']}",
+                'old' => $payment,
+                'new' => array_merge($payment, ['status' => 'voided', 'void_reason' => $reason]),
+            ]);
             $this->flashSuccess('Payment voided and the balance restored.');
         } else {
             $this->flashError('This payment is already voided.');

@@ -2,6 +2,60 @@
 
 use App\Core\Session;
 use App\Core\Database;
+use App\Core\Lang;
+
+if (!function_exists('t')) {
+    /**
+     * Translate a string for the current UI language (English / Nepali).
+     * Falls back to English, then to the raw key, so a missing
+     * translation never breaks a page — it just shows in English.
+     *
+     * Example: t('unread_messages', ['count' => 3]) => "3 unread messages"
+     */
+    function t(string $key, array $replace = []): string
+    {
+        return Lang::get($key, $replace);
+    }
+}
+
+if (!function_exists('tr_const')) {
+    /**
+     * Translate a value normally looked up in one of config/constants.php's
+     * label maps (STUDENT_STATUSES, PAYMENT_MODES, CLASS_SECTION_SHIFTS...).
+     * Tries the Nepali/English dictionary first (as 'status_<value>'); if
+     * no such entry exists, falls back to the constant's own English label
+     * map (unchanged behavior), then to st().
+     */
+    function tr_const(array $map, ?string $value): string
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+        $key = 'status_' . strtolower(str_replace(' ', '_', $value));
+        $translated = Lang::get($key);
+        return $translated !== $key ? $translated : ($map[$value] ?? st($value));
+    }
+}
+
+if (!function_exists('st')) {
+    /**
+     * Translate a dynamic status/enum value coming from the database
+     * (e.g. $row['status'] === 'active', 'present', 'paid'...).
+     * Looks it up as 'status_<value>' in the language files; if no
+     * translation exists for that word, falls back to the previous
+     * behavior (ucfirst) so nothing regresses for values we haven't
+     * catalogued (shifts, categories, payment modes, etc.).
+     */
+    function st(?string $value): string
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+        $key = 'status_' . strtolower(str_replace(' ', '_', $value));
+        $translated = Lang::get($key);
+        return $translated !== $key ? $translated : ucfirst($value);
+    }
+}
 
 /**
  * Returns the app's base path (the URL path segment before routes start),
@@ -253,7 +307,9 @@ if (!function_exists('role_label')) {
         if (!$role) {
             return '';
         }
-        return ucwords(str_replace('_', ' ', $role));
+        $key = 'role_' . strtolower($role);
+        $translated = Lang::get($key);
+        return $translated !== $key ? $translated : ucwords(str_replace('_', ' ', $role));
     }
 }
 
@@ -746,22 +802,106 @@ if (!function_exists('log_activity')) {
      * Never throws — a logging failure must not break the request that
      * triggered it (mirrors the defensive try/catch already used around
      * the `messages` table in app/Views/layouts/app.php).
+     *
+     * $context (all optional, backward compatible — every existing
+     * 2-argument call site keeps working unchanged):
+     *   - module:       display group for the Activity Log filters, e.g. 'Students', 'Fee Payments'
+     *   - record_id:    the affected row's id
+     *   - record_name:  a human label for that row, e.g. a student's name
+     *   - old:          array/object snapshot before the change (json_encode'd)
+     *   - new:          array/object snapshot after the change (json_encode'd)
+     *
+     * Browser / OS / device type and the current session id are always
+     * captured automatically from the request — no call site needs to
+     * pass those.
      */
-    function log_activity(string $action, string $description = ''): void
+    function log_activity(string $action, string $description = '', array $context = []): void
     {
         try {
+            $ua = (string) ($_SERVER['HTTP_USER_AGENT'] ?? '');
+            $client = parse_user_agent($ua);
+
             Database::getInstance()->query(
-                'INSERT INTO `activity_logs` (`user_id`, `action`, `description`, `ip_address`, `created_at`) VALUES (:uid, :action, :description, :ip, NOW())',
+                'INSERT INTO `activity_logs`
+                    (`user_id`, `action`, `module`, `record_id`, `record_name`,
+                     `description`, `old_value`, `new_value`,
+                     `ip_address`, `browser`, `os`, `device_type`, `session_id`, `created_at`)
+                 VALUES
+                    (:uid, :action, :module, :record_id, :record_name,
+                     :description, :old_value, :new_value,
+                     :ip, :browser, :os, :device_type, :session_id, NOW())',
                 [
-                    'uid'         => \App\Core\Auth::id(),
-                    'action'      => $action,
-                    'description' => $description,
-                    'ip'          => $_SERVER['REMOTE_ADDR'] ?? null,
+                    'uid'          => \App\Core\Auth::id(),
+                    'action'       => $action,
+                    'module'       => $context['module'] ?? null,
+                    'record_id'    => isset($context['record_id']) ? (int) $context['record_id'] : null,
+                    'record_name'  => $context['record_name'] ?? null,
+                    'description'  => $description,
+                    'old_value'    => isset($context['old']) ? json_encode($context['old']) : null,
+                    'new_value'    => isset($context['new']) ? json_encode($context['new']) : null,
+                    'ip'           => $_SERVER['REMOTE_ADDR'] ?? null,
+                    'browser'      => $client['browser'],
+                    'os'           => $client['os'],
+                    'device_type'  => $client['device_type'],
+                    'session_id'   => session_id() ?: null,
                 ]
             );
         } catch (\Throwable $e) {
             error_log('[ACTIVITY LOG ERROR] ' . $e->getMessage());
         }
+    }
+}
+
+if (!function_exists('parse_user_agent')) {
+    /**
+     * Deliberately simple User-Agent sniff for the Activity Log's
+     * Browser/OS/Device columns — not meant to be exhaustive, just enough
+     * to make the audit trail readable at a glance. Order matters (e.g.
+     * Edge and Opera also contain "Chrome" in their UA string, so they're
+     * checked first).
+     * @return array{browser:string,os:string,device_type:string}
+     */
+    function parse_user_agent(string $ua): array
+    {
+        $browser = 'Unknown';
+        foreach ([
+            'Edg/'     => 'Edge',
+            'OPR/'     => 'Opera',
+            'Firefox/' => 'Firefox',
+            'Chrome/'  => 'Chrome',
+            'Safari/'  => 'Safari',
+        ] as $needle => $label) {
+            if (str_contains($ua, $needle)) {
+                // Safari's UA also contains "Chrome" on some Android WebViews —
+                // Chrome is checked above Safari in the loop, so this is fine.
+                $browser = $label;
+                break;
+            }
+        }
+
+        $os = 'Unknown';
+        foreach ([
+            'Windows' => 'Windows',
+            'Android' => 'Android',
+            'iPhone'  => 'iOS',
+            'iPad'    => 'iOS',
+            'Mac OS'  => 'macOS',
+            'Linux'   => 'Linux',
+        ] as $needle => $label) {
+            if (str_contains($ua, $needle)) {
+                $os = $label;
+                break;
+            }
+        }
+
+        $deviceType = 'Desktop';
+        if (str_contains($ua, 'iPad') || str_contains($ua, 'Tablet')) {
+            $deviceType = 'Tablet';
+        } elseif (str_contains($ua, 'Mobi') || str_contains($ua, 'Android')) {
+            $deviceType = 'Mobile';
+        }
+
+        return ['browser' => $browser, 'os' => $os, 'device_type' => $deviceType];
     }
 }
 

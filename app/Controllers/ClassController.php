@@ -89,7 +89,10 @@ class ClassController extends Controller
 
         $id = $classModel->insert($this->payload($data, $code));
 
-        log_activity('created_record', "Created class #{$id}: {$data['name']}");
+        log_activity('created_record', "Created class #{$id}: {$data['name']}", [
+            'module' => 'Classes', 'record_id' => $id, 'record_name' => $data['name'],
+            'new' => $this->payload($data, $code),
+        ]);
         $this->flashSuccess("Class added successfully. Class ID: {$id}, Code: {$code}.");
 
         if ($this->input('save_and_add_another')) {
@@ -164,9 +167,13 @@ class ClassController extends Controller
             $this->failWithErrors(['code' => ['This Class Code is already in use.']], $data, 'classes/' . $classId . '/edit');
         }
 
-        $classModel->update($classId, $this->payload($data, $code, true));
+        $newData = $this->payload($data, $code, true);
+        $classModel->update($classId, $newData);
 
-        log_activity('updated_record', "Updated class #{$classId}: {$data['name']}");
+        log_activity('updated_record', "Updated class #{$classId}: {$data['name']}", [
+            'module' => 'Classes', 'record_id' => $classId, 'record_name' => $data['name'],
+            'old' => $class, 'new' => $newData,
+        ]);
         $this->flashSuccess("Class updated successfully. Class ID: {$classId}.");
         $this->redirect(url('classes'));
     }
@@ -184,7 +191,9 @@ class ClassController extends Controller
 
         try {
             $classModel->delete($classId);
-            log_activity('deleted_record', "Deleted class #{$classId}: {$class['name']}");
+            log_activity('deleted_record', "Deleted class #{$classId}: {$class['name']}", [
+                'module' => 'Classes', 'record_id' => $classId, 'record_name' => $class['name'], 'old' => $class,
+            ]);
             $this->flashSuccess("Class deleted successfully. Deleted Class ID: {$classId}.");
         } catch (\Throwable $e) {
             error_log('[CLASS DELETE ERROR] ' . $e->getMessage());
